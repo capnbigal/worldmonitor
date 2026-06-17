@@ -3,6 +3,8 @@ using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Displacement;
+using WorldMonitor.Contracts.Economy;
+using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
@@ -12,6 +14,8 @@ using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Tech;
+using WorldMonitor.Contracts.Trending;
 using WorldMonitor.Contracts.Weather;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
@@ -89,6 +93,26 @@ builder.Services.AddHttpClient<IServiceStatusProvider, StatusPageProvider>(c => 
 builder.Services.AddHttpClient<IDisplacementProvider, UnhcrDisplacementProvider>(c =>
 {
     c.BaseAddress = new Uri("https://api.unhcr.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IFxRateProvider, FrankfurterFxProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.frankfurter.dev/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IHackerNewsProvider, HackerNewsProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://hacker-news.firebaseio.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IWikipediaTrendingProvider, WikipediaTrendingProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://en.wikipedia.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IEconomyProvider, WorldBankEconomyProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.worldbank.org/");
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
 
@@ -228,6 +252,46 @@ app.MapGet("/api/displacement/v1/by-country", async (IWorldMonitorCache cache, I
         TimeSpan.FromHours(24),
         async ct => new ListDisplacementResponse { Items = await displacement.FetchAsync(40, ct) });
     return Results.Json(data ?? new ListDisplacementResponse(), WmJson.Options);
+});
+
+// Exchange rates — ECB reference rates per 1 USD (Frankfurter), cached 6 hours.
+app.MapGet("/api/fx/v1/rates", async (IWorldMonitorCache cache, IFxRateProvider fx) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "fx:rates:v1",
+        TimeSpan.FromHours(6),
+        async ct => new ListFxRatesResponse { Items = await fx.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListFxRatesResponse(), WmJson.Options);
+});
+
+// Hacker News — top stories, cached 10 min.
+app.MapGet("/api/tech/v1/hacker-news", async (IWorldMonitorCache cache, IHackerNewsProvider hn) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "tech:hn:v1",
+        TimeSpan.FromMinutes(10),
+        async ct => new ListHackerNewsResponse { Items = await hn.FetchAsync(30, ct) });
+    return Results.Json(data ?? new ListHackerNewsResponse(), WmJson.Options);
+});
+
+// Trending — most-read English Wikipedia articles (previous day), cached 3 hours.
+app.MapGet("/api/trending/v1/wikipedia", async (IWorldMonitorCache cache, IWikipediaTrendingProvider trending) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "trending:wikipedia:v1",
+        TimeSpan.FromHours(3),
+        async ct => new ListTrendingResponse { Items = await trending.FetchAsync(30, ct) });
+    return Results.Json(data ?? new ListTrendingResponse(), WmJson.Options);
+});
+
+// Global economy — latest GDP growth (annual %) for major economies (World Bank), cached 24 hours.
+app.MapGet("/api/economy/v1/gdp-growth", async (IWorldMonitorCache cache, IEconomyProvider economy) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "economy:gdp:v1",
+        TimeSpan.FromHours(24),
+        async ct => new ListEconomyResponse { Items = await economy.FetchAsync(20, ct) });
+    return Results.Json(data ?? new ListEconomyResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");

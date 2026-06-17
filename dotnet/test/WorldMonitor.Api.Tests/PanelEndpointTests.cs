@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Displacement;
+using WorldMonitor.Contracts.Economy;
+using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
@@ -15,6 +17,8 @@ using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Tech;
+using WorldMonitor.Contracts.Trending;
 using WorldMonitor.Contracts.Weather;
 using WorldMonitor.Data;
 using WorldMonitor.Providers;
@@ -121,6 +125,42 @@ public sealed class FakeDisplacementProvider : IDisplacementProvider
         ]);
 }
 
+public sealed class FakeFxRateProvider : IFxRateProvider
+{
+    public Task<IReadOnlyList<FxRate>> FetchAsync(int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<FxRate>>(
+        [
+            new FxRate { Currency = "EUR", Rate = 0.86252 },
+        ]);
+}
+
+public sealed class FakeHackerNewsProvider : IHackerNewsProvider
+{
+    public Task<IReadOnlyList<HackerNewsStory>> FetchAsync(int count = 30, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<HackerNewsStory>>(
+        [
+            new HackerNewsStory { Id = 42_000_000, Title = "Show HN: World Monitor", Url = "https://example.com/x", Score = 256, By = "dev", Comments = 42, At = 1_781_678_400_000 },
+        ]);
+}
+
+public sealed class FakeWikipediaTrendingProvider : IWikipediaTrendingProvider
+{
+    public Task<IReadOnlyList<TrendingArticle>> FetchAsync(int count = 30, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<TrendingArticle>>(
+        [
+            new TrendingArticle { Title = "Oliver Tree", Views = 1_495_154, Description = "Musician", Url = "https://en.wikipedia.org/wiki/Oliver_Tree" },
+        ]);
+}
+
+public sealed class FakeEconomyProvider : IEconomyProvider
+{
+    public Task<IReadOnlyList<EconomyIndicator>> FetchAsync(int count = 20, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<EconomyIndicator>>(
+        [
+            new EconomyIndicator { Country = "India", GrowthPercent = 7.0, Year = "2024" },
+        ]);
+}
+
 public sealed class PanelApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -150,6 +190,14 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IServiceStatusProvider, FakeServiceStatusProvider>();
             services.RemoveAll<IDisplacementProvider>();                 // drop the real UNHCR HttpClient
             services.AddSingleton<IDisplacementProvider, FakeDisplacementProvider>();
+            services.RemoveAll<IFxRateProvider>();                       // drop the real Frankfurter HttpClient
+            services.AddSingleton<IFxRateProvider, FakeFxRateProvider>();
+            services.RemoveAll<IHackerNewsProvider>();                   // drop the real Hacker News HttpClient
+            services.AddSingleton<IHackerNewsProvider, FakeHackerNewsProvider>();
+            services.RemoveAll<IWikipediaTrendingProvider>();            // drop the real Wikipedia HttpClient
+            services.AddSingleton<IWikipediaTrendingProvider, FakeWikipediaTrendingProvider>();
+            services.RemoveAll<IEconomyProvider>();                      // drop the real World Bank HttpClient
+            services.AddSingleton<IEconomyProvider, FakeEconomyProvider>();
         });
     }
 
@@ -305,5 +353,57 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         var item = Assert.Single(resp!.Items);
         Assert.Equal("Afghanistan", item.Country);
         Assert.Equal(5_766_586, item.Refugees);
+    }
+
+    [Fact]
+    public async Task Fx_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListFxRatesResponse>("api/fx/v1/rates");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("EUR", item.Currency);
+        Assert.Equal(0.86252, item.Rate);
+    }
+
+    [Fact]
+    public async Task Hacker_news_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListHackerNewsResponse>("api/tech/v1/hacker-news");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Show HN: World Monitor", item.Title);
+        Assert.Equal(256, item.Score);
+    }
+
+    [Fact]
+    public async Task Trending_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListTrendingResponse>("api/trending/v1/wikipedia");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Oliver Tree", item.Title);
+        Assert.Equal(1_495_154, item.Views);
+    }
+
+    [Fact]
+    public async Task Economy_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListEconomyResponse>("api/economy/v1/gdp-growth");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("India", item.Country);
+        Assert.Equal(7.0, item.GrowthPercent);
     }
 }

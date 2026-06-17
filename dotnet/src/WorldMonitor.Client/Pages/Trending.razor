@@ -1,0 +1,74 @@
+@page "/trending"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Trending on Wikipedia</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Most-read English Wikipedia articles (previous day)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_articles is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_articles" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Article</MudTh>
+            <MudTh Style="text-align:right">Views</MudTh>
+            <MudTh>Description</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Article">
+                @if (!string.IsNullOrEmpty(context.Url))
+                {
+                    <MudLink Href="@context.Url" Target="_blank">@context.Title</MudLink>
+                }
+                else
+                {
+                    @context.Title
+                }
+            </MudTd>
+            <MudTd DataLabel="Views" Style="text-align:right">@context.Views.ToString("N0")</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_articles.Count articles</MudText>
+}
+
+@code {
+    private IReadOnlyList<TrendingArticle>? _articles;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListTrendingResponse>("api/trending/v1/wikipedia");
+            _articles = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

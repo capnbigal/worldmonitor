@@ -1,0 +1,66 @@
+@page "/fx"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Exchange Rates</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Foreign-exchange rates per 1 USD (ECB reference rates via Frankfurter)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_rates is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_rates" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Currency</MudTh>
+            <MudTh Style="text-align:right">Rate</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Currency"><b>@context.Currency</b></MudTd>
+            <MudTd DataLabel="Rate" Style="text-align:right">
+                @context.Rate.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture)
+                <MudText Typo="Typo.caption">per 1 USD</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_rates.Count currencies</MudText>
+}
+
+@code {
+    private IReadOnlyList<FxRate>? _rates;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListFxRatesResponse>("api/fx/v1/rates");
+            _rates = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
