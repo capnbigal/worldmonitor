@@ -74,4 +74,56 @@ public class WorldMonitorCacheTests
         Assert.Equal(1, calls);                               // exactly one upstream fetch
         Assert.All(results, r => Assert.Equal("v", r!.V));
     }
+
+    [Fact]
+    public async Task Null_result_caches_sentinel_for_default_120s_and_returns_null()
+    {
+        var (cache, store, clock) = New();
+        var calls = 0;
+        Func<CancellationToken, Task<Doc?>> fetch = _ => { calls++; return Task.FromResult<Doc?>(null); };
+
+        Assert.Null(await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), fetch));
+        Assert.Equal(1, store.UpsertCount);                  // sentinel stored
+
+        clock.Advance(TimeSpan.FromSeconds(119));
+        Assert.Null(await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), fetch));
+        Assert.Equal(1, calls);                              // still within negative TTL ⇒ no refetch
+
+        clock.Advance(TimeSpan.FromSeconds(2));              // now > 120s
+        Assert.Null(await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), fetch));
+        Assert.Equal(2, calls);                              // sentinel expired ⇒ refetch
+    }
+
+    [Fact]
+    public async Task Fetcher_throw_caches_sentinel_for_30s_and_rethrows()
+    {
+        var (cache, store, clock) = New();
+        Func<CancellationToken, Task<Doc?>> boom = _ => throw new InvalidOperationException("upstream down");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), boom));   // re-thrown to caller
+        Assert.Equal(1, store.UpsertCount);                  // 30s sentinel stored
+
+        // Within 30s a follower sees the sentinel ⇒ null, no fetch.
+        Assert.Null(await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), _ => Task.FromResult<Doc?>(new Doc("late"))));
+
+        clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.Equal("late2", (await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5),
+            _ => Task.FromResult<Doc?>(new Doc("late2"))))!.V);              // sentinel expired ⇒ refetch
+    }
+
+    [Fact]
+    public async Task Store_read_error_with_active_negative_cooldown_returns_null_without_fetching()
+    {
+        var (cache, store, _) = New();
+        Func<CancellationToken, Task<Doc?>> nullFetch = _ => Task.FromResult<Doc?>(null);
+        await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), nullFetch);   // arms local negative cooldown (120s)
+
+        store.FailReads = true;                                               // simulate store outage
+        var calls = 0;
+        var r = await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5),
+            _ => { calls++; return Task.FromResult<Doc?>(new Doc("x")); });
+        Assert.Null(r);
+        Assert.Equal(0, calls);                                              // cooldown short-circuits the fetch
+    }
 }
