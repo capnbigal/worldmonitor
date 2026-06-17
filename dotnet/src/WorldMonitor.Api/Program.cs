@@ -3,6 +3,7 @@ using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
+using WorldMonitor.Contracts.News;
 using WorldMonitor.Contracts.Seismology;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
@@ -43,6 +44,8 @@ builder.Services.AddHttpClient<INaturalEventProvider, EonetProvider>(c =>
     c.BaseAddress = new Uri("https://eonet.gsfc.nasa.gov/");
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
+// News fetches absolute feed URLs across many hosts, so no BaseAddress.
+builder.Services.AddHttpClient<INewsProvider, RssNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
 
 var app = builder.Build();
 
@@ -90,6 +93,16 @@ app.MapGet("/api/natural/v1/events", async (IWorldMonitorCache cache, INaturalEv
         TimeSpan.FromMinutes(15),
         async ct => new ListNaturalEventsResponse { Events = await natural.FetchAsync(40, ct) });
     return Results.Json(data ?? new ListNaturalEventsResponse(), WmJson.Options);
+});
+
+// World news — aggregated public RSS feeds, cached 5 min.
+app.MapGet("/api/news/v1/headlines", async (IWorldMonitorCache cache, INewsProvider news) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "news:headlines:v1",
+        TimeSpan.FromMinutes(5),
+        async ct => new ListNewsResponse { Items = await news.FetchHeadlinesAsync(60, ct) });
+    return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");
