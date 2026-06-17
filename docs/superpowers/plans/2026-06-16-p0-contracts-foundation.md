@@ -22,7 +22,7 @@
 
 ```
 dotnet/
-  WorldMonitor.sln
+  WorldMonitor.slnx
   Directory.Build.props                         shared TFM/nullable/langversion for all projects
   src/WorldMonitor.Contracts/
     WorldMonitor.Contracts.csproj
@@ -49,7 +49,7 @@ dotnet/
 ### Task 1: Scaffold the solution and projects
 
 **Files:**
-- Create: `dotnet/WorldMonitor.sln`
+- Create: `dotnet/WorldMonitor.slnx`
 - Create: `dotnet/Directory.Build.props`
 - Create: `dotnet/src/WorldMonitor.Contracts/WorldMonitor.Contracts.csproj`
 - Create: `dotnet/test/WorldMonitor.Contracts.Tests/WorldMonitor.Contracts.Tests.csproj`
@@ -70,7 +70,7 @@ dotnet new sln -n WorldMonitor -o dotnet
 dotnet new classlib -n WorldMonitor.Contracts -o dotnet/src/WorldMonitor.Contracts -f net10.0
 dotnet new xunit -n WorldMonitor.Contracts.Tests -o dotnet/test/WorldMonitor.Contracts.Tests -f net10.0
 rm dotnet/src/WorldMonitor.Contracts/Class1.cs dotnet/test/WorldMonitor.Contracts.Tests/UnitTest1.cs
-dotnet sln dotnet/WorldMonitor.sln add dotnet/src/WorldMonitor.Contracts dotnet/test/WorldMonitor.Contracts.Tests
+dotnet sln dotnet/WorldMonitor.slnx add dotnet/src/WorldMonitor.Contracts dotnet/test/WorldMonitor.Contracts.Tests
 dotnet add dotnet/test/WorldMonitor.Contracts.Tests reference dotnet/src/WorldMonitor.Contracts
 ```
 Expected: each command prints success; final `dotnet sln list` (optional) shows both projects.
@@ -93,7 +93,7 @@ Create `dotnet/Directory.Build.props`:
 
 - [ ] **Step 4: Verify the empty solution builds**
 
-Run: `dotnet build dotnet/WorldMonitor.sln`
+Run: `dotnet build dotnet/WorldMonitor.slnx`
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)`
 
 - [ ] **Step 5: Commit**
@@ -152,7 +152,7 @@ public class JsonConventionsTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: FAIL — compile error, `WmJson` does not exist.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -178,7 +178,7 @@ public static class WmJson
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Commit**
@@ -240,7 +240,7 @@ public class CoreDtoParityTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: FAIL — `GeoCoordinates`/`PaginationResponse`/`FieldViolation` do not exist.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -280,7 +280,7 @@ public sealed record FieldViolation
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: PASS (5 passed total).
 
 - [ ] **Step 5: Commit**
@@ -294,7 +294,7 @@ git commit -m "feat(contracts): add core GeoCoordinates/PaginationResponse/Field
 
 ### Task 4: Cache-tier constants (`CacheTier`, `TierHeaders`)
 
-Exact header strings copied verbatim from `server/gateway.ts:90-111` (`TIER_HEADERS` and the CDN variant). These drive the API host's `OutputCache`/response-header policies in P2; defining them now keeps the wire contract in one shared place.
+Exact header strings copied verbatim from `server/gateway.ts:89-112` — all **8** tiers in `TIER_HEADERS`/`TIER_CDN_CACHE`, including `no-store` (whose CDN value is `null`, so `CdnCacheControl` is typed `string?`). These drive the API host's `OutputCache`/response-header policies in P2; defining them now keeps the wire contract in one shared place.
 
 **Files:**
 - Create: `dotnet/src/WorldMonitor.Contracts/Http/CacheTier.cs`
@@ -329,8 +329,17 @@ public class CacheTierTests
     }
 
     [Fact]
-    public void Every_tier_has_both_headers()
+    public void NoStore_tier_matches_legacy_gateway()
     {
+        Assert.Equal("no-store", TierHeaders.CacheControl[CacheTier.NoStore]);
+        Assert.Null(TierHeaders.CdnCacheControl[CacheTier.NoStore]);
+    }
+
+    [Fact]
+    public void Every_tier_is_present_in_both_maps()
+    {
+        // Every tier must have a key in both maps. CdnCacheControl[NoStore] is intentionally
+        // null (no CDN-Cache-Control header for no-store) — see NoStore_tier_matches_legacy_gateway.
         foreach (var tier in Enum.GetValues<CacheTier>())
         {
             Assert.True(TierHeaders.CacheControl.ContainsKey(tier), $"missing Cache-Control for {tier}");
@@ -342,7 +351,7 @@ public class CacheTierTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: FAIL — `CacheTier`/`TierHeaders` do not exist.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -359,11 +368,12 @@ public enum CacheTier
     SlowBrowser,
     Static,
     Daily,
+    NoStore,
     Live,
 }
 ```
 
-Create `Http/TierHeaders.cs` (values verbatim from `server/gateway.ts:90-111`):
+Create `Http/TierHeaders.cs` (values verbatim from `server/gateway.ts:89-112`):
 ```csharp
 using System.Collections.Frozen;
 
@@ -380,10 +390,12 @@ public static class TierHeaders
         [CacheTier.SlowBrowser] = "max-age=300, stale-while-revalidate=60, stale-if-error=1800",
         [CacheTier.Static]      = "public, max-age=600, s-maxage=3600, stale-while-revalidate=600, stale-if-error=14400",
         [CacheTier.Daily]       = "public, max-age=3600, s-maxage=14400, stale-while-revalidate=7200, stale-if-error=172800",
+        [CacheTier.NoStore]     = "no-store",
         [CacheTier.Live]        = "public, max-age=30, s-maxage=60, stale-while-revalidate=60, stale-if-error=300",
     }.ToFrozenDictionary();
 
-    public static readonly FrozenDictionary<CacheTier, string> CdnCacheControl = new Dictionary<CacheTier, string>
+    // CdnCacheControl[NoStore] is null (no CDN-Cache-Control header for no-store), mirroring TIER_CDN_CACHE.
+    public static readonly FrozenDictionary<CacheTier, string?> CdnCacheControl = new Dictionary<CacheTier, string?>
     {
         [CacheTier.Fast]        = "public, s-maxage=600, stale-while-revalidate=300, stale-if-error=1200",
         [CacheTier.Medium]      = "public, s-maxage=1200, stale-while-revalidate=600, stale-if-error=1800",
@@ -391,6 +403,7 @@ public static class TierHeaders
         [CacheTier.SlowBrowser] = "public, s-maxage=900, stale-while-revalidate=60, stale-if-error=1800",
         [CacheTier.Static]      = "public, s-maxage=14400, stale-while-revalidate=3600, stale-if-error=28800",
         [CacheTier.Daily]       = "public, s-maxage=86400, stale-while-revalidate=14400, stale-if-error=172800",
+        [CacheTier.NoStore]     = null,
         [CacheTier.Live]        = "public, s-maxage=60, stale-while-revalidate=60, stale-if-error=300",
     }.ToFrozenDictionary();
 }
@@ -398,8 +411,8 @@ public static class TierHeaders
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
-Expected: PASS (8 passed total).
+Run: `dotnet test dotnet/WorldMonitor.slnx`
+Expected: PASS (9 passed total).
 
 - [ ] **Step 5: Commit**
 
@@ -521,7 +534,7 @@ public class SeismologyWireParityTests
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
+Run: `dotnet test dotnet/WorldMonitor.slnx`
 Expected: FAIL — seismology types do not exist.
 
 - [ ] **Step 4: Write minimal implementation**
@@ -589,8 +602,8 @@ public sealed record ListEarthquakesRequest
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `dotnet test dotnet/WorldMonitor.sln`
-Expected: PASS (11 passed total).
+Run: `dotnet test dotnet/WorldMonitor.slnx`
+Expected: PASS (12 passed total).
 
 - [ ] **Step 6: Commit**
 
@@ -620,8 +633,8 @@ Coexists with the legacy TypeScript tree during migration.
 
 ## Build & test
 ```
-dotnet build dotnet/WorldMonitor.sln
-dotnet test  dotnet/WorldMonitor.sln
+dotnet build dotnet/WorldMonitor.slnx
+dotnet test  dotnet/WorldMonitor.slnx
 ```
 ```
 
@@ -629,10 +642,10 @@ dotnet test  dotnet/WorldMonitor.sln
 
 Run:
 ```bash
-dotnet build dotnet/WorldMonitor.sln -c Release
-dotnet test dotnet/WorldMonitor.sln -c Release
+dotnet build dotnet/WorldMonitor.slnx -c Release
+dotnet test dotnet/WorldMonitor.slnx -c Release
 ```
-Expected: `Build succeeded. 0 Warning(s) 0 Error(s)` and `Passed! - Failed: 0, Passed: 11`.
+Expected: `Build succeeded. 0 Warning(s) 0 Error(s)` and `Passed! - Failed: 0, Passed: 12`.
 
 - [ ] **Step 3: Commit + push + open PR**
 
@@ -641,7 +654,7 @@ git add dotnet/README.md
 git commit -m "docs(dotnet): add solution README"
 git push -u origin feat/dotnet-p0-contracts
 gh pr create --base main --title "P0: .NET Contracts foundation" \
-  --body "Implements P0 of the Blazor/.NET rewrite (docs/superpowers/specs/2026-06-16-blazor-dotnet-rewrite-design.md). Solution scaffold + WorldMonitor.Contracts (wire conventions, core DTOs, cache tiers, seismology worked domain) with 11 passing wire-parity tests."
+  --body "Implements P0 of the Blazor/.NET rewrite (docs/superpowers/specs/2026-06-16-blazor-dotnet-rewrite-design.md). Solution scaffold + WorldMonitor.Contracts (wire conventions, core DTOs, cache tiers, seismology worked domain) with 12 passing wire-parity tests."
 ```
 Expected: PR URL printed.
 
