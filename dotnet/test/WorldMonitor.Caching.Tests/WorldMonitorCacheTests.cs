@@ -158,4 +158,16 @@ public class WorldMonitorCacheTests
             _ => { calls++; throw new InvalidOperationException("still down"); }));
         Assert.Equal(1, calls);                            // fallback expired ⇒ fetch attempted (and threw)
     }
+
+    [Fact]
+    public async Task Fetcher_exceeding_timeout_throws_TimeoutException_and_caches_sentinel()
+    {
+        var (cache, store, _) = New();
+        Func<CancellationToken, Task<Doc?>> slow = async ct => { await Task.Delay(TimeSpan.FromSeconds(5), ct); return new Doc("late"); };
+
+        await Assert.ThrowsAsync<TimeoutException>(() => cache.GetOrSetAsync(
+            "k", TimeSpan.FromMinutes(5), slow, fetcherTimeout: TimeSpan.FromMilliseconds(50)));
+
+        Assert.Equal(1, store.UpsertCount);   // a 30s error-sentinel was written before re-throw
+    }
 }
