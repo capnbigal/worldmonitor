@@ -1,0 +1,85 @@
+@page "/sentiment"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Crypto Fear &amp; Greed</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Crypto Fear &amp; Greed Index (alternative.me), via the World Monitor cache.</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="my-2">No readings available.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-6 mb-4 d-flex flex-column align-center" Elevation="2">
+        <MudText Typo="Typo.h1">@_items[0].Value</MudText>
+        <MudChip T="string" Color="@ValueColor(_items[0].Value)" Class="mt-2">@_items[0].Classification</MudChip>
+    </MudPaper>
+
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh Style="width:160px">Date (UTC)</MudTh>
+            <MudTh Style="width:120px">Value</MudTh>
+            <MudTh>Classification</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@DateTimeOffset.FromUnixTimeMilliseconds(context.At).UtcDateTime.ToString("yyyy-MM-dd")</MudTd>
+            <MudTd DataLabel="Value">@context.Value</MudTd>
+            <MudTd DataLabel="Classification">
+                <MudChip T="string" Size="Size.Small" Color="@ValueColor(context.Value)">@context.Classification</MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count readings</MudText>
+}
+
+@code {
+    private IReadOnlyList<FearGreedReading>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListFearGreedResponse>("api/sentiment/v1/fear-greed");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color ValueColor(int value) => value switch
+    {
+        < 25 => Color.Error,
+        < 45 => Color.Warning,
+        < 55 => Color.Default,
+        < 75 => Color.Info,
+        _ => Color.Success,
+    };
+}

@@ -1,0 +1,93 @@
+@page "/space"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Space Weather</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">NOAA SWPC planetary K-index (geomagnetic activity)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="my-2">No K-index readings available.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.overline">Current Kp</MudText>
+        <MudText Typo="Typo.h2">@_items[0].Kp.ToString("0.0")</MudText>
+        <MudChip T="string" Color="@StormColor(_items[0].Kp)">@StormLevel(_items[0].Kp)</MudChip>
+    </MudPaper>
+
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh>Time</MudTh>
+            <MudTh Style="text-align:right">Kp</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Time">@(DateTimeOffset.FromUnixTimeMilliseconds(context.At).UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'"))</MudTd>
+            <MudTd DataLabel="Kp" Style="text-align:right">@context.Kp.ToString("0.0")</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count readings</MudText>
+}
+
+@code {
+    private IReadOnlyList<KpReading>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListKpResponse>("api/space/v1/kp-index");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string StormLevel(double kp) => kp switch
+    {
+        < 5 => "Quiet/Active",
+        < 6 => "G1 Minor",
+        < 7 => "G2 Moderate",
+        < 8 => "G3 Strong",
+        < 9 => "G4 Severe",
+        _ => "G5 Extreme",
+    };
+
+    private static Color StormColor(double kp) => kp switch
+    {
+        < 5 => Color.Success,
+        < 6 => Color.Info,
+        < 7 => Color.Warning,
+        < 8 => Color.Warning,
+        < 9 => Color.Error,
+        _ => Color.Error,
+    };
+}

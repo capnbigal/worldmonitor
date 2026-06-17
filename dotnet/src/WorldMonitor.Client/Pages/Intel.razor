@@ -1,0 +1,80 @@
+@page "/intel"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Global Intel</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Worldwide coverage via GDELT</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_articles is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_articles" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh Style="width:180px">Source</MudTh>
+            <MudTh Style="width:160px">Country</MudTh>
+            <MudTh Style="width:140px">When</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">
+                <MudLink Href="@context.Url" Target="_blank">@context.Title</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Source">@(context.Domain ?? "—")</MudTd>
+            <MudTd DataLabel="Country">@(context.SourceCountry ?? "—")</MudTd>
+            <MudTd DataLabel="When">@Relative(context.SeenAt)</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_articles.Count articles</MudText>
+}
+
+@code {
+    private IReadOnlyList<IntelArticle>? _articles;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListIntelResponse>("api/intel/v1/articles");
+            _articles = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string Relative(long seenAtMs)
+    {
+        if (seenAtMs <= 0) return "—";
+        var delta = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(seenAtMs);
+        if (delta.Ticks < 0) return "just now";
+        if (delta.TotalMinutes < 1) return "just now";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return $"{(int)delta.TotalDays}d ago";
+    }
+}
