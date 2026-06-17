@@ -27,5 +27,10 @@ public class WorldMonitorDbContext(DbContextOptions<WorldMonitorDbContext> optio
             .IsUnique()
             .HasFilter("[Endpoint] IS NOT NULL")
             .HasDatabaseName("UX_NotificationChannels_Endpoint");
+
+        // Slack, Discord, and Webhook all declare WebhookEnvelope — map them to one shared column.
+        modelBuilder.Entity<SlackChannel>().Property(s => s.WebhookEnvelope).HasColumnName("WebhookEnvelope");
+        modelBuilder.Entity<DiscordChannel>().Property(d => d.WebhookEnvelope).HasColumnName("WebhookEnvelope");
+        modelBuilder.Entity<WebhookChannel>().Property(w => w.WebhookEnvelope).HasColumnName("WebhookEnvelope");
     }
 }

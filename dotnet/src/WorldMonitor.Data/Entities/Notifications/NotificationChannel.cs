@@ -6,7 +6,7 @@ public abstract class NotificationChannel
 {
     public int Id { get; set; }
     public required string UserId { get; set; }
-    public string ChannelType { get; set; } = "";   // discriminator — EF sets it from the concrete type
+    public string ChannelType { get; set; } = null!;   // discriminator — EF sets this to the concrete type's wire value
     public bool Verified { get; set; }
     public DateTime LinkedAt { get; set; }
 }
