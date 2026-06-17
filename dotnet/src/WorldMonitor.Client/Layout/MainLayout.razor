@@ -16,6 +16,7 @@
     <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
         <MudNavMenu>
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Public">Earthquakes</MudNavLink>
+            <MudNavLink Href="/news" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Newspaper">World News</MudNavLink>
             <MudNavLink Href="/markets" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CurrencyBitcoin">Markets</MudNavLink>
             <MudNavLink Href="/natural" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.LocalFireDepartment">Natural Events</MudNavLink>
         </MudNavMenu>
