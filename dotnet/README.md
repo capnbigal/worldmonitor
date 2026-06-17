@@ -13,6 +13,9 @@ Coexists with the legacy TypeScript tree during migration.
   coalescing, asymmetric negative-sentinel caching (120s on null / 30s on error + re-throw),
   and an isolate-local outage bridge. All tests are DB-free unit tests using an in-memory store
   fake and a virtual `IClock`.
+- `src/WorldMonitor.Data` (P1b-1) — first domain entities: `User`, `UserPreference` (client-version
+  compare-and-set repository), `FollowedCountry` (`UNIQUE(UserId,Country)` retires the legacy OCC
+  scaffolding; follower count via a single floor-applying helper). LocalDB integration tests.
 
 ## Database (dev/test)
 Integration tests target LocalDB `(localdb)\MSSQLLocalDB` (no Docker). Apply migrations manually with:
