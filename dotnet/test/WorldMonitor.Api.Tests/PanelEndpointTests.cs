@@ -10,16 +10,19 @@ using WorldMonitor.Contracts.Disasters;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
 using WorldMonitor.Contracts.Energy;
+using WorldMonitor.Contracts.Fires;
 using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Macro;
 using WorldMonitor.Contracts.Market;
+using WorldMonitor.Contracts.MarketNews;
 using WorldMonitor.Contracts.Natural;
 using WorldMonitor.Contracts.News;
 using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Stocks;
 using WorldMonitor.Contracts.Tech;
 using WorldMonitor.Contracts.Trending;
 using WorldMonitor.Contracts.Volcano;
@@ -202,6 +205,33 @@ public sealed class FakeMacroProvider : IMacroProvider
         ]);
 }
 
+public sealed class FakeStockProvider : IStockProvider
+{
+    public Task<IReadOnlyList<StockQuote>> FetchAsync(string apiKey, int count = 15, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<StockQuote>>(
+        [
+            new StockQuote { Symbol = "AAPL", Name = "Apple", Price = 227.5, Change = 1.23, ChangePercent = 0.54 },
+        ]);
+}
+
+public sealed class FakeFireProvider : IFireProvider
+{
+    public Task<IReadOnlyList<FireDetection>> FetchAsync(string apiKey, int count = 100, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<FireDetection>>(
+        [
+            new FireDetection { Latitude = -11.23, Longitude = 16.45, Brightness = 330.1, Confidence = "n", AcqDate = "2026-06-16", Frp = 12.7 },
+        ]);
+}
+
+public sealed class FakeMarketNewsProvider : IMarketNewsProvider
+{
+    public Task<IReadOnlyList<NewsItem>> FetchAsync(string apiKey, int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NewsItem>>(
+        [
+            new NewsItem { Id = "7460000", Title = "Markets rally on cooler inflation", Link = "https://example.com/mn", Source = "Reuters", PublishedAt = 1_781_700_000_000 },
+        ]);
+}
+
 public sealed class FakeRegionalNewsProvider : IRegionalNewsProvider
 {
     public IReadOnlyList<(string Key, string Name)> Regions => [("europe", "Europe")];
@@ -287,6 +317,12 @@ public class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IRegionalNewsProvider, FakeRegionalNewsProvider>();
             services.RemoveAll<IMacroProvider>();                        // drop the real FRED HttpClient
             services.AddSingleton<IMacroProvider, FakeMacroProvider>();
+            services.RemoveAll<IStockProvider>();                        // drop the real Finnhub HttpClient
+            services.AddSingleton<IStockProvider, FakeStockProvider>();
+            services.RemoveAll<IMarketNewsProvider>();                   // drop the real Finnhub news HttpClient
+            services.AddSingleton<IMarketNewsProvider, FakeMarketNewsProvider>();
+            services.RemoveAll<IFireProvider>();                         // drop the real NASA FIRMS HttpClient
+            services.AddSingleton<IFireProvider, FakeFireProvider>();
             services.RemoveAll<IDisasterProvider>();                     // drop the real GDACS HttpClient
             services.AddSingleton<IDisasterProvider, FakeDisasterProvider>();
             services.RemoveAll<IVolcanoProvider>();                      // drop the real USGS volcano HttpClient
@@ -555,6 +591,39 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task Stocks_endpoint_reports_not_configured_when_no_key_is_set()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListStocksResponse>("api/stocks/v1/quotes");
+        Assert.NotNull(resp);
+        Assert.False(resp!.Configured);
+        Assert.Empty(resp.Items);
+    }
+
+    [Fact]
+    public async Task Market_news_endpoint_reports_not_configured_when_no_key_is_set()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListMarketNewsResponse>("api/markets/v1/news");
+        Assert.NotNull(resp);
+        Assert.False(resp!.Configured);
+        Assert.Empty(resp.Items);
+    }
+
+    [Fact]
+    public async Task Fires_endpoint_reports_not_configured_when_no_key_is_set()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListFiresResponse>("api/fires/v1/active");
+        Assert.NotNull(resp);
+        Assert.False(resp!.Configured);
+        Assert.Empty(resp.Items);
+    }
+
+    [Fact]
     public async Task Regional_news_endpoint_returns_provider_data_for_the_requested_region()
     {
         await factory.ResetCacheAsync();
@@ -605,21 +674,26 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
     }
 }
 
-/// <summary>Same as <see cref="PanelApiFactory"/> but with a (fake) FRED key configured, to exercise the
-/// keyed-panel "configured" path. The key is set at the DI/options level (reliable) rather than via config.</summary>
-public sealed class MacroConfiguredApiFactory : PanelApiFactory
+/// <summary>Same as <see cref="PanelApiFactory"/> but with (fake) keys configured for every keyed panel, to
+/// exercise the "configured" path. Keys are set at the DI/options level (reliable) rather than via config.</summary>
+public sealed class KeyedConfiguredApiFactory : PanelApiFactory
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
         builder.ConfigureServices(services =>
-            services.Configure<ExternalApiKeys>(o => o.Fred = "test-key"));
+            services.Configure<ExternalApiKeys>(o =>
+            {
+                o.Fred = "test-key";
+                o.Finnhub = "test-key";
+                o.NasaFirms = "test-key";
+            }));
     }
 }
 
 [Trait("Category", "Integration")]
 [Collection(ApiIntegrationCollection.Name)]
-public sealed class MacroConfiguredEndpointTests(MacroConfiguredApiFactory factory) : IClassFixture<MacroConfiguredApiFactory>
+public sealed class KeyedConfiguredEndpointTests(KeyedConfiguredApiFactory factory) : IClassFixture<KeyedConfiguredApiFactory>
 {
     [Fact]
     public async Task Macro_endpoint_returns_data_when_key_is_configured()
@@ -632,5 +706,44 @@ public sealed class MacroConfiguredEndpointTests(MacroConfiguredApiFactory facto
         Assert.True(resp!.Configured);
         var item = Assert.Single(resp.Items);   // from FakeMacroProvider
         Assert.Equal("DGS10", item.SeriesId);
+    }
+
+    [Fact]
+    public async Task Stocks_endpoint_returns_data_when_key_is_configured()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListStocksResponse>("api/stocks/v1/quotes");
+
+        Assert.NotNull(resp);
+        Assert.True(resp!.Configured);
+        var item = Assert.Single(resp.Items);
+        Assert.Equal("AAPL", item.Symbol);
+    }
+
+    [Fact]
+    public async Task Market_news_endpoint_returns_data_when_key_is_configured()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListMarketNewsResponse>("api/markets/v1/news");
+
+        Assert.NotNull(resp);
+        Assert.True(resp!.Configured);
+        var item = Assert.Single(resp.Items);
+        Assert.Equal("Reuters", item.Source);
+    }
+
+    [Fact]
+    public async Task Fires_endpoint_returns_data_when_key_is_configured()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListFiresResponse>("api/fires/v1/active");
+
+        Assert.NotNull(resp);
+        Assert.True(resp!.Configured);
+        var item = Assert.Single(resp.Items);
+        Assert.Equal(330.1, item.Brightness);
     }
 }

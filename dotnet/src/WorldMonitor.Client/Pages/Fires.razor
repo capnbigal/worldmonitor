@@ -1,0 +1,90 @@
+@page "/fires"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Wildfire Detections</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Active fire hotspots, last 24h (NASA FIRMS, VIIRS S-NPP)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_response is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!_response.Configured)
+{
+    <MudAlert Severity="Severity.Info" Class="my-2">
+        <MudText Typo="Typo.subtitle2">This panel needs a free NASA FIRMS API key.</MudText>
+        <ol style="margin:0.5rem 0 0 1.2rem">
+            <li>Register (free) at <MudLink Href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" Target="_blank">firms.modaps.eosdis.nasa.gov</MudLink> to get a MAP_KEY.</li>
+            <li>Set it in <code>dotnet/src/WorldMonitor.Api/appsettings.json</code> under <code>ExternalApis:NasaFirms</code> — or the environment variable <code>ExternalApis__NasaFirms</code>.</li>
+            <li>Restart the API host and refresh.</li>
+        </ol>
+        <MudText Typo="Typo.caption" Class="mt-1">The app works fully without this key — only this panel is gated.</MudText>
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_response.Items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Location</MudTh>
+            <MudTh Style="text-align:right">Brightness</MudTh>
+            <MudTh Style="width:120px">Confidence</MudTh>
+            <MudTh Style="text-align:right">FRP</MudTh>
+            <MudTh Style="width:140px">Date</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Location">@context.Latitude.ToString("0.00"), @context.Longitude.ToString("0.00")</MudTd>
+            <MudTd DataLabel="Brightness" Style="text-align:right">@context.Brightness.ToString("0.0") K</MudTd>
+            <MudTd DataLabel="Confidence">
+                <MudChip T="string" Size="Size.Small" Color="@ConfColor(context.Confidence)">@context.Confidence</MudChip>
+            </MudTd>
+            <MudTd DataLabel="FRP" Style="text-align:right">@context.Frp.ToString("0.0") MW</MudTd>
+            <MudTd DataLabel="Date">@context.AcqDate</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_response.Items.Count detections · NASA FIRMS</MudText>
+}
+
+@code {
+    private ListFiresResponse? _response;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _response = await Http.GetFromJsonAsync<ListFiresResponse>("api/fires/v1/active") ?? new ListFiresResponse();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color ConfColor(string? confidence) => confidence?.ToLowerInvariant() switch
+    {
+        "h" or "high" => Color.Error,
+        "n" or "nominal" => Color.Warning,
+        "l" or "low" => Color.Default,
+        _ => Color.Default,
+    };
+}
