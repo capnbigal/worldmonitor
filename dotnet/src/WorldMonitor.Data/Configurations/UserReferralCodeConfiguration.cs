@@ -13,6 +13,7 @@ public sealed class UserReferralCodeConfiguration : IEntityTypeConfiguration<Use
         b.Property(c => c.UserId).HasMaxLength(128);
         b.Property(c => c.Code).HasMaxLength(64);
         b.HasIndex(c => c.Code).IsUnique().HasDatabaseName("UX_UserReferralCodes_Code");
+        // Intentional tightening vs the Convex source (non-unique by_user): one share-code per user.
         b.HasIndex(c => c.UserId).IsUnique().HasDatabaseName("UX_UserReferralCodes_User");
     }
 }

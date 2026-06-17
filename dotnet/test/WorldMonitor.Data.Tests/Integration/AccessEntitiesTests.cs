@@ -23,13 +23,25 @@ public class AccessEntitiesTests(LocalDbFixture fx)
     }
 
     [Fact]
-    public async Task Referral_code_is_unique_and_credits_are_unique_per_pair()
+    public async Task Referral_code_is_unique()
     {
         var code = "c_" + S();
         await using var ctx = fx.NewContext();
         ctx.UserReferralCodes.Add(new UserReferralCode { UserId = "ua" + S(), Code = code, CreatedAt = DateTime.UtcNow });
         await ctx.SaveChangesAsync();
         ctx.UserReferralCodes.Add(new UserReferralCode { UserId = "ub" + S(), Code = code, CreatedAt = DateTime.UtcNow });
+        await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task Referral_credit_is_unique_per_referrer_and_referee()
+    {
+        var referrer = "ref_" + S();
+        var refereeEmail = S() + "@x.com";
+        await using var ctx = fx.NewContext();
+        ctx.UserReferralCredits.Add(new UserReferralCredit { ReferrerUserId = referrer, RefereeEmail = refereeEmail, CreatedAt = DateTime.UtcNow });
+        await ctx.SaveChangesAsync();
+        ctx.UserReferralCredits.Add(new UserReferralCredit { ReferrerUserId = referrer, RefereeEmail = refereeEmail, CreatedAt = DateTime.UtcNow });
         await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
     }
 
