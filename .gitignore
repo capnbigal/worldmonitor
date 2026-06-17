@@ -88,3 +88,5 @@ playground-pricing.html
 # .NET build artifacts
 dotnet/**/bin/
 dotnet/**/obj/
+dotnet/**/TestResults/
+*.cobertura.xml
