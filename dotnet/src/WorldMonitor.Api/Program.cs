@@ -131,6 +131,8 @@ builder.Services.AddHttpClient<IEnergyMixProvider, UkCarbonIntensityProvider>(c 
 });
 // Tech news fetches absolute feed URLs across many hosts, so no BaseAddress.
 builder.Services.AddHttpClient<ITechNewsProvider, TechNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
+// Regional news also fetches absolute feed URLs across many hosts, so no BaseAddress.
+builder.Services.AddHttpClient<IRegionalNewsProvider, RegionalNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
 builder.Services.AddHttpClient<IDisasterProvider, GdacsDisasterProvider>(c =>
 {
     c.BaseAddress = new Uri("https://www.gdacs.org/");
@@ -352,6 +354,17 @@ app.MapGet("/api/tech/v1/news", async (IWorldMonitorCache cache, ITechNewsProvid
         "tech:news:v1",
         TimeSpan.FromMinutes(10),
         async ct => new ListNewsResponse { Items = await tech.FetchHeadlinesAsync(50, ct) });
+    return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
+});
+
+// Regional news — world headlines scoped to a region (RSS), cached 10 min per region.
+app.MapGet("/api/news/v1/region/{region}", async (IWorldMonitorCache cache, IRegionalNewsProvider regional, string region) =>
+{
+    var key = $"news:region:{region.ToLowerInvariant()}:v1";
+    var data = await cache.GetOrSetAsync(
+        key,
+        TimeSpan.FromMinutes(10),
+        async ct => new ListNewsResponse { Items = await regional.FetchAsync(region, 40, ct) });
     return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
 });
 

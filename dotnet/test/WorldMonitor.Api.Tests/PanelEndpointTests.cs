@@ -192,6 +192,17 @@ public sealed class FakeTechNewsProvider : ITechNewsProvider
         ]);
 }
 
+public sealed class FakeRegionalNewsProvider : IRegionalNewsProvider
+{
+    public IReadOnlyList<(string Key, string Name)> Regions => [("europe", "Europe")];
+
+    public Task<IReadOnlyList<NewsItem>> FetchAsync(string region, int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NewsItem>>(
+        [
+            new NewsItem { Id = $"{region}-1", Title = $"Headline for {region}", Link = "https://example.com/r", Source = "BBC", PublishedAt = 1_781_687_520_000 },
+        ]);
+}
+
 public sealed class FakeDisasterProvider : IDisasterProvider
 {
     public Task<IReadOnlyList<DisasterAlert>> FetchAsync(int count = 40, CancellationToken ct = default) =>
@@ -262,6 +273,8 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEnergyMixProvider, FakeEnergyMixProvider>();
             services.RemoveAll<ITechNewsProvider>();                     // drop the real tech-RSS HttpClient
             services.AddSingleton<ITechNewsProvider, FakeTechNewsProvider>();
+            services.RemoveAll<IRegionalNewsProvider>();                 // drop the real regional-RSS HttpClient
+            services.AddSingleton<IRegionalNewsProvider, FakeRegionalNewsProvider>();
             services.RemoveAll<IDisasterProvider>();                     // drop the real GDACS HttpClient
             services.AddSingleton<IDisasterProvider, FakeDisasterProvider>();
             services.RemoveAll<IVolcanoProvider>();                      // drop the real USGS volcano HttpClient
@@ -513,6 +526,18 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         Assert.NotNull(resp);
         var item = Assert.Single(resp!.Items);
         Assert.Equal("Ars Technica", item.Source);
+    }
+
+    [Fact]
+    public async Task Regional_news_endpoint_returns_provider_data_for_the_requested_region()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListNewsResponse>("api/news/v1/region/europe");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Headline for europe", item.Title);
     }
 
     [Fact]
