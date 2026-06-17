@@ -4,6 +4,7 @@ using WorldMonitor.Contracts.Json;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
+using WorldMonitor.Contracts.Energy;
 using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
@@ -115,6 +116,18 @@ builder.Services.AddHttpClient<IEconomyProvider, WorldBankEconomyProvider>(c =>
     c.BaseAddress = new Uri("https://api.worldbank.org/");
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
+builder.Services.AddHttpClient<ITrendingCryptoProvider, CoinGeckoTrendingProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.coingecko.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IEnergyMixProvider, UkCarbonIntensityProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.carbonintensity.org.uk/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+// Tech news fetches absolute feed URLs across many hosts, so no BaseAddress.
+builder.Services.AddHttpClient<ITechNewsProvider, TechNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
 
 var app = builder.Build();
 
@@ -292,6 +305,36 @@ app.MapGet("/api/economy/v1/gdp-growth", async (IWorldMonitorCache cache, IEcono
         TimeSpan.FromHours(24),
         async ct => new ListEconomyResponse { Items = await economy.FetchAsync(20, ct) });
     return Results.Json(data ?? new ListEconomyResponse(), WmJson.Options);
+});
+
+// Trending crypto — most-searched coins on CoinGecko, cached 10 min.
+app.MapGet("/api/market/v1/trending-coins", async (IWorldMonitorCache cache, ITrendingCryptoProvider trending) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "market:trending:v1",
+        TimeSpan.FromMinutes(10),
+        async ct => new ListTrendingCoinsResponse { Items = await trending.FetchAsync(15, ct) });
+    return Results.Json(data ?? new ListTrendingCoinsResponse(), WmJson.Options);
+});
+
+// UK grid energy mix — live GB electricity generation mix (National Grid ESO), cached 15 min.
+app.MapGet("/api/energy/v1/uk-mix", async (IWorldMonitorCache cache, IEnergyMixProvider energy) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "energy:uk-mix:v1",
+        TimeSpan.FromMinutes(15),
+        async ct => new ListEnergyMixResponse { Items = await energy.FetchAsync(20, ct) });
+    return Results.Json(data ?? new ListEnergyMixResponse(), WmJson.Options);
+});
+
+// Tech & AI news — aggregated public technology RSS feeds, cached 10 min.
+app.MapGet("/api/tech/v1/news", async (IWorldMonitorCache cache, ITechNewsProvider tech) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "tech:news:v1",
+        TimeSpan.FromMinutes(10),
+        async ct => new ListNewsResponse { Items = await tech.FetchHeadlinesAsync(50, ct) });
+    return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");

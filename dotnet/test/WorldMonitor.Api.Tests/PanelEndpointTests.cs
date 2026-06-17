@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
+using WorldMonitor.Contracts.Energy;
 using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
@@ -161,6 +162,33 @@ public sealed class FakeEconomyProvider : IEconomyProvider
         ]);
 }
 
+public sealed class FakeTrendingCryptoProvider : ITrendingCryptoProvider
+{
+    public Task<IReadOnlyList<TrendingCoin>> FetchAsync(int count = 15, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<TrendingCoin>>(
+        [
+            new TrendingCoin { Name = "Plasma", Symbol = "XPL", MarketCapRank = 138, Price = 0.1169, ChangePercent24h = 29.4 },
+        ]);
+}
+
+public sealed class FakeEnergyMixProvider : IEnergyMixProvider
+{
+    public Task<IReadOnlyList<GenerationFuel>> FetchAsync(int count = 20, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<GenerationFuel>>(
+        [
+            new GenerationFuel { Fuel = "Wind", Percent = 32.9 },
+        ]);
+}
+
+public sealed class FakeTechNewsProvider : ITechNewsProvider
+{
+    public Task<IReadOnlyList<NewsItem>> FetchHeadlinesAsync(int count = 50, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<NewsItem>>(
+        [
+            new NewsItem { Id = "t1", Title = "New open-weights model tops the charts", Link = "https://example.com/ai", Source = "Ars Technica", PublishedAt = 1_781_687_520_000 },
+        ]);
+}
+
 public sealed class PanelApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -198,6 +226,12 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IWikipediaTrendingProvider, FakeWikipediaTrendingProvider>();
             services.RemoveAll<IEconomyProvider>();                      // drop the real World Bank HttpClient
             services.AddSingleton<IEconomyProvider, FakeEconomyProvider>();
+            services.RemoveAll<ITrendingCryptoProvider>();              // drop the real CoinGecko trending HttpClient
+            services.AddSingleton<ITrendingCryptoProvider, FakeTrendingCryptoProvider>();
+            services.RemoveAll<IEnergyMixProvider>();                    // drop the real Carbon Intensity HttpClient
+            services.AddSingleton<IEnergyMixProvider, FakeEnergyMixProvider>();
+            services.RemoveAll<ITechNewsProvider>();                     // drop the real tech-RSS HttpClient
+            services.AddSingleton<ITechNewsProvider, FakeTechNewsProvider>();
         });
     }
 
@@ -405,5 +439,43 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         var item = Assert.Single(resp!.Items);
         Assert.Equal("India", item.Country);
         Assert.Equal(7.0, item.GrowthPercent);
+    }
+
+    [Fact]
+    public async Task Trending_crypto_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListTrendingCoinsResponse>("api/market/v1/trending-coins");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("XPL", item.Symbol);
+        Assert.Equal(138, item.MarketCapRank);
+    }
+
+    [Fact]
+    public async Task Energy_mix_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListEnergyMixResponse>("api/energy/v1/uk-mix");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Wind", item.Fuel);
+        Assert.Equal(32.9, item.Percent);
+    }
+
+    [Fact]
+    public async Task Tech_news_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListNewsResponse>("api/tech/v1/news");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Ars Technica", item.Source);
     }
 }
