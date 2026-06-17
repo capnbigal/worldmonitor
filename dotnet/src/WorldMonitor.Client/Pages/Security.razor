@@ -1,0 +1,73 @@
+@page "/security"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Security Advisories</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Recently added entries from the CISA Known Exploited Vulnerabilities catalog, via the World Monitor cache.</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh Style="width:150px">CVE</MudTh>
+            <MudTh Style="width:220px">Vendor / Product</MudTh>
+            <MudTh>Name</MudTh>
+            <MudTh Style="width:120px">Added</MudTh>
+            <MudTh Style="width:130px">Ransomware</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="CVE">
+                <MudLink Href="@($"https://nvd.nist.gov/vuln/detail/{context.CveId}")" Target="_blank">@context.CveId</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Vendor / Product">@context.VendorProject · @context.Product</MudTd>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Added">@(context.DateAdded?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+            <MudTd DataLabel="Ransomware">
+                <MudChip T="string" Size="Size.Small" Color="@(context.KnownRansomware ? Color.Error : Color.Default)">@(context.KnownRansomware ? "Ransomware" : "—")</MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count vulnerabilities</MudText>
+}
+
+@code {
+    private IReadOnlyList<KnownVulnerability>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListVulnerabilitiesResponse>("api/security/v1/known-exploited-vulnerabilities");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

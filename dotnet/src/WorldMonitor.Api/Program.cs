@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
+using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
 using WorldMonitor.Contracts.News;
 using WorldMonitor.Contracts.Seismology;
+using WorldMonitor.Contracts.Security;
+using WorldMonitor.Contracts.Sentiment;
+using WorldMonitor.Contracts.Space;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
 using WorldMonitor.Data.Time;
@@ -46,6 +50,26 @@ builder.Services.AddHttpClient<INaturalEventProvider, EonetProvider>(c =>
 });
 // News fetches absolute feed URLs across many hosts, so no BaseAddress.
 builder.Services.AddHttpClient<INewsProvider, RssNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
+builder.Services.AddHttpClient<ISecurityAdvisoryProvider, CisaKevProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://www.cisa.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IMarketSentimentProvider, FearGreedProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.alternative.me/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IIntelProvider, GdeltIntelProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.gdeltproject.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<ISpaceWeatherProvider, NoaaSpaceWeatherProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://services.swpc.noaa.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
 
 var app = builder.Build();
 
@@ -103,6 +127,46 @@ app.MapGet("/api/news/v1/headlines", async (IWorldMonitorCache cache, INewsProvi
         TimeSpan.FromMinutes(5),
         async ct => new ListNewsResponse { Items = await news.FetchHeadlinesAsync(60, ct) });
     return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
+});
+
+// Security advisories — CISA Known Exploited Vulnerabilities catalog, cached 6 hours.
+app.MapGet("/api/security/v1/known-exploited-vulnerabilities", async (IWorldMonitorCache cache, ISecurityAdvisoryProvider security) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "security:kev:v1",
+        TimeSpan.FromHours(6),
+        async ct => new ListVulnerabilitiesResponse { Items = await security.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListVulnerabilitiesResponse(), WmJson.Options);
+});
+
+// Crypto Fear & Greed index — alternative.me, cached 30 min.
+app.MapGet("/api/sentiment/v1/fear-greed", async (IWorldMonitorCache cache, IMarketSentimentProvider sentiment) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "sentiment:fng:v1",
+        TimeSpan.FromMinutes(30),
+        async ct => new ListFearGreedResponse { Items = await sentiment.FetchAsync(30, ct) });
+    return Results.Json(data ?? new ListFearGreedResponse(), WmJson.Options);
+});
+
+// Global intel — worldwide news coverage from GDELT, cached 15 min.
+app.MapGet("/api/intel/v1/articles", async (IWorldMonitorCache cache, IIntelProvider intel) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "intel:gdelt:v1",
+        TimeSpan.FromMinutes(15),
+        async ct => new ListIntelResponse { Items = await intel.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListIntelResponse(), WmJson.Options);
+});
+
+// Space weather — NOAA planetary K-index (geomagnetic activity), cached 30 min.
+app.MapGet("/api/space/v1/kp-index", async (IWorldMonitorCache cache, ISpaceWeatherProvider space) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "space:kp:v1",
+        TimeSpan.FromMinutes(30),
+        async ct => new ListKpResponse { Items = await space.FetchAsync(24, ct) });
+    return Results.Json(data ?? new ListKpResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");
