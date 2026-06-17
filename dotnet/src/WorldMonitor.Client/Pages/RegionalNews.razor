@@ -1,0 +1,91 @@
+@page "/regional-news"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Regional News</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">World headlines by region (BBC, France 24, Al Jazeera) via the World Monitor cache.</MudText>
+
+<MudTabs Elevation="0" Rounded="true" Color="Color.Primary" ActivePanelIndexChanged="OnRegionChanged" Class="mb-3">
+    @foreach (var r in _regions)
+    {
+        <MudTabPanel Text="@r.Name" />
+    }
+</MudTabs>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudList T="NewsItem" Dense="true">
+        @foreach (var item in _items)
+        {
+            <MudListItem T="NewsItem" Href="@item.Link" Target="_blank">
+                <div class="d-flex align-center gap-2">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@item.Source</MudChip>
+                    <MudText Typo="Typo.body1" Class="flex-grow-1">@item.Title</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Ago(item.PublishedAt)</MudText>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(item.Summary))
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.Summary</MudText>
+                }
+            </MudListItem>
+            <MudDivider />
+        }
+    </MudList>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count headlines · @_regions[_index].Name</MudText>
+}
+
+@code {
+    private static readonly (string Key, string Name)[] _regions =
+    [
+        ("europe", "Europe"),
+        ("middle-east", "Middle East"),
+        ("asia", "Asia"),
+        ("africa", "Africa"),
+        ("americas", "Americas"),
+    ];
+
+    private IReadOnlyList<NewsItem>? _items;
+    private string? _error;
+    private int _index;
+
+    protected override Task OnInitializedAsync() => Load(0);
+
+    private Task OnRegionChanged(int index) => Load(index);
+
+    private async Task Load(int index)
+    {
+        _index = index;
+        _error = null;
+        _items = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListNewsResponse>($"api/news/v1/region/{_regions[index].Key}");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string Ago(long epochMs)
+    {
+        if (epochMs <= 0) return "";
+        var span = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(epochMs);
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+}
