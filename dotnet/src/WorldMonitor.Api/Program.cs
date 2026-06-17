@@ -3,11 +3,13 @@ using Microsoft.Extensions.Options;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
 using WorldMonitor.Contracts.Macro;
+using WorldMonitor.Contracts.MarketNews;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Disasters;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
 using WorldMonitor.Contracts.Energy;
+using WorldMonitor.Contracts.Fires;
 using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
@@ -18,6 +20,7 @@ using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Stocks;
 using WorldMonitor.Contracts.Tech;
 using WorldMonitor.Contracts.Trending;
 using WorldMonitor.Contracts.Volcano;
@@ -143,6 +146,21 @@ builder.Services.AddHttpClient<IRegionalNewsProvider, RegionalNewsProvider>(c =>
 builder.Services.AddHttpClient<IMacroProvider, FredMacroProvider>(c =>
 {
     c.BaseAddress = new Uri("https://api.stlouisfed.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IStockProvider, FinnhubStockProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://finnhub.io/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IMarketNewsProvider, FinnhubNewsProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://finnhub.io/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IFireProvider, NasaFirmsProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://firms.modaps.eosdis.nasa.gov/");
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
 builder.Services.AddHttpClient<IDisasterProvider, GdacsDisasterProvider>(c =>
@@ -423,6 +441,48 @@ app.MapGet("/api/macro/v1/indicators", async (IWorldMonitorCache cache, IMacroPr
         TimeSpan.FromHours(6),
         async ct => new ListMacroResponse { Items = await fred.FetchAsync(apiKey, 20, ct), Configured = true });
     return Results.Json(data ?? new ListMacroResponse { Configured = false }, WmJson.Options);
+});
+
+// Stocks — quotes for major US equities (Finnhub). Requires a free Finnhub key; cached 2 min.
+app.MapGet("/api/stocks/v1/quotes", async (IWorldMonitorCache cache, IStockProvider stocks, IOptions<ExternalApiKeys> keys) =>
+{
+    var apiKey = keys.Value.Finnhub;
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return Results.Json(new ListStocksResponse { Configured = false }, WmJson.Options);
+
+    var data = await cache.GetOrSetAsync(
+        "stocks:finnhub:v1",
+        TimeSpan.FromMinutes(2),
+        async ct => new ListStocksResponse { Items = await stocks.FetchAsync(apiKey, 15, ct), Configured = true });
+    return Results.Json(data ?? new ListStocksResponse { Configured = false }, WmJson.Options);
+});
+
+// Market news — financial-market headlines (Finnhub). Requires a free Finnhub key; cached 10 min.
+app.MapGet("/api/markets/v1/news", async (IWorldMonitorCache cache, IMarketNewsProvider news, IOptions<ExternalApiKeys> keys) =>
+{
+    var apiKey = keys.Value.Finnhub;
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return Results.Json(new ListMarketNewsResponse { Configured = false }, WmJson.Options);
+
+    var data = await cache.GetOrSetAsync(
+        "marketnews:finnhub:v1",
+        TimeSpan.FromMinutes(10),
+        async ct => new ListMarketNewsResponse { Items = await news.FetchAsync(apiKey, 40, ct), Configured = true });
+    return Results.Json(data ?? new ListMarketNewsResponse { Configured = false }, WmJson.Options);
+});
+
+// Wildfire detections — active fire hotspots (NASA FIRMS). Requires a free FIRMS MAP_KEY; cached 30 min.
+app.MapGet("/api/fires/v1/active", async (IWorldMonitorCache cache, IFireProvider fires, IOptions<ExternalApiKeys> keys) =>
+{
+    var apiKey = keys.Value.NasaFirms;
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return Results.Json(new ListFiresResponse { Configured = false }, WmJson.Options);
+
+    var data = await cache.GetOrSetAsync(
+        "fires:firms:v1",
+        TimeSpan.FromMinutes(30),
+        async ct => new ListFiresResponse { Items = await fires.FetchAsync(apiKey, 100, ct), Configured = true });
+    return Results.Json(data ?? new ListFiresResponse { Configured = false }, WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");

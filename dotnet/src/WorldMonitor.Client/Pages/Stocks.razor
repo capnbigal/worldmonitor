@@ -1,0 +1,81 @@
+@page "/stocks"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Stocks</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Quotes for major US equities (Finnhub)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_response is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!_response.Configured)
+{
+    <MudAlert Severity="Severity.Info" Class="my-2">
+        <MudText Typo="Typo.subtitle2">This panel needs a free Finnhub API key.</MudText>
+        <ol style="margin:0.5rem 0 0 1.2rem">
+            <li>Register (free) at <MudLink Href="https://finnhub.io/register" Target="_blank">finnhub.io/register</MudLink> to get an API key.</li>
+            <li>Set it in <code>dotnet/src/WorldMonitor.Api/appsettings.json</code> under <code>ExternalApis:Finnhub</code> — or the environment variable <code>ExternalApis__Finnhub</code>.</li>
+            <li>Restart the API host and refresh.</li>
+        </ol>
+        <MudText Typo="Typo.caption" Class="mt-1">The app works fully without this key — only this panel is gated.</MudText>
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_response.Items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh><b>Symbol</b></MudTh>
+            <MudTh>Company</MudTh>
+            <MudTh Style="text-align:right">Price</MudTh>
+            <MudTh Style="width:120px">24h</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Symbol"><b>@context.Symbol</b></MudTd>
+            <MudTd DataLabel="Company">@context.Name</MudTd>
+            <MudTd DataLabel="Price" Style="text-align:right">@context.Price.ToString("N2") USD</MudTd>
+            <MudTd DataLabel="24h">
+                <MudChip T="string" Size="Size.Small" Color="@((context.ChangePercent ?? 0) >= 0 ? Color.Success : Color.Error)">@((context.ChangePercent ?? 0).ToString("0.00"))%</MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_response.Items.Count quotes · Finnhub</MudText>
+}
+
+@code {
+    private WorldMonitor.Contracts.Stocks.ListStocksResponse? _response;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _response = await Http.GetFromJsonAsync<WorldMonitor.Contracts.Stocks.ListStocksResponse>("api/stocks/v1/quotes")
+                ?? new WorldMonitor.Contracts.Stocks.ListStocksResponse();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
