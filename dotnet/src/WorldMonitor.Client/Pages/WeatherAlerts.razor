@@ -1,0 +1,87 @@
+@page "/weather-alerts"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">US Weather Alerts</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Active severe &amp; extreme weather alerts (NWS / NOAA)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_alerts is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_alerts" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh>Event</MudTh>
+            <MudTh Style="width:120px">Severity</MudTh>
+            <MudTh>Area</MudTh>
+            <MudTh Style="width:120px">When</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Event">@context.Event</MudTd>
+            <MudTd DataLabel="Severity">
+                <MudChip T="string" Size="Size.Small" Color="@SevColor(context.Severity)">@context.Severity</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Area">@(context.Area ?? "—")</MudTd>
+            <MudTd DataLabel="When">@Relative(context.At)</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_alerts.Count alerts</MudText>
+}
+
+@code {
+    private IReadOnlyList<WeatherAlert>? _alerts;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListWeatherAlertsResponse>("api/weather-alerts/v1/active");
+            _alerts = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color SevColor(string severity) => severity switch
+    {
+        "Extreme" => Color.Error,
+        "Severe" => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static string Relative(long atMs)
+    {
+        if (atMs <= 0) return "—";
+        var delta = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(atMs);
+        if (delta.Ticks < 0) return "just now";
+        if (delta.TotalMinutes < 1) return "just now";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return $"{(int)delta.TotalDays}d ago";
+    }
+}

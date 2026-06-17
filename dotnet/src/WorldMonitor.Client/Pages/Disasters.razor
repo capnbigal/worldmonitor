@@ -1,0 +1,95 @@
+@page "/disasters"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Global Disasters</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">GDACS — global disaster alerts (floods, cyclones, earthquakes, volcanoes)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_alerts is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_alerts" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh Style="width:120px">Level</MudTh>
+            <MudTh>Event</MudTh>
+            <MudTh Style="width:140px">When</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Level">
+                <MudChip T="string" Size="Size.Small" Color="@LevelColor(context.AlertLevel)">@context.AlertLevel</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Event">
+                @if (!string.IsNullOrEmpty(context.Link))
+                {
+                    <MudLink Href="@context.Link" Target="_blank">@context.Title</MudLink>
+                }
+                else
+                {
+                    @context.Title
+                }
+            </MudTd>
+            <MudTd DataLabel="When">@(context.At > 0 ? Ago(context.At) : "—")</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_alerts.Count alerts</MudText>
+}
+
+@code {
+    private IReadOnlyList<DisasterAlert>? _alerts;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListDisastersResponse>("api/disasters/v1/alerts");
+            _alerts = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color LevelColor(string level) => level switch
+    {
+        "Red" => Color.Error,
+        "Orange" => Color.Warning,
+        "Green" => Color.Success,
+        _ => Color.Default,
+    };
+
+    private static string Ago(long epochMs)
+    {
+        if (epochMs <= 0) return "";
+        var span = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(epochMs);
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+}

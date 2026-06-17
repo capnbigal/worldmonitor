@@ -1,0 +1,99 @@
+@page "/volcano"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Volcano Alerts</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Volcanoes at elevated alert level (USGS Volcano Hazards Program)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Volcano</MudTh>
+            <MudTh Style="width:120px">Color</MudTh>
+            <MudTh>Alert Level</MudTh>
+            <MudTh>Observatory</MudTh>
+            <MudTh Style="width:120px">When</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Volcano">
+                @if (!string.IsNullOrEmpty(context.Url))
+                {
+                    <MudLink Href="@context.Url" Target="_blank">@context.Volcano</MudLink>
+                }
+                else
+                {
+                    @context.Volcano
+                }
+            </MudTd>
+            <MudTd DataLabel="Color">
+                <MudChip T="string" Size="Size.Small" Color="@ColorFor(context.ColorCode)">@context.ColorCode</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Alert Level">@context.AlertLevel</MudTd>
+            <MudTd DataLabel="Observatory">@(context.Observatory ?? "—")</MudTd>
+            <MudTd DataLabel="When">@Relative(context.At)</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count alerts</MudText>
+}
+
+@code {
+    private IReadOnlyList<VolcanoAlert>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListVolcanoAlertsResponse>("api/volcano/v1/alerts");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color ColorFor(string? colorCode) => colorCode switch
+    {
+        "RED" => Color.Error,
+        "ORANGE" => Color.Warning,
+        "YELLOW" => Color.Info,
+        "GREEN" => Color.Success,
+        _ => Color.Default,
+    };
+
+    private static string Relative(long epochMs)
+    {
+        if (epochMs <= 0) return "—";
+        var span = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(epochMs);
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+}
