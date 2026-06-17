@@ -24,6 +24,10 @@ Coexists with the legacy TypeScript tree during migration.
   unique `NormalizedEmail`; broadcast wave fields dropped), `UserReferralCode`/`UserReferralCredit`,
   `ContactMessage`, `UserApiKey` (unique `KeyHash`, no premium gate), `EmailSuppression`.
   `RegistrationRepository.RegisterAsync` is idempotent and reads `EmailSuppression`. **Completes the P1b domain model.**
+- `src/WorldMonitor.Data` (P1c) — server-side ML state: `VectorEntry` + `IVectorSearch`/`SqlServerVectorSearch`
+  (VARBINARY embeddings, top-K via a C# brute-force cosine fallback — SQL 2019 has no native VECTOR — and
+  FIFO prune to 5000); `DedupRepository` (per-signal-type TTL); `TopicVelocityRepository` (7-day baseline);
+  `CorrelationStateRepository` (single-row snapshot, cold-start null). **Completes the WorldMonitor.Data data layer.**
 
 ## Database (dev/test)
 Integration tests target LocalDB `(localdb)\MSSQLLocalDB` (no Docker). Apply migrations manually with:
