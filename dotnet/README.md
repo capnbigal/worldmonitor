@@ -16,6 +16,10 @@ Coexists with the legacy TypeScript tree during migration.
 - `src/WorldMonitor.Data` (P1b-1) — first domain entities: `User`, `UserPreference` (client-version
   compare-and-set repository), `FollowedCountry` (`UNIQUE(UserId,Country)` retires the legacy OCC
   scaffolding; follower count via a single floor-applying helper). LocalDB integration tests.
+- `src/WorldMonitor.Data` (P1b-2) — Notifications: `NotificationChannel` (TPH over 6 channel types) with
+  `UNIQUE(UserId,ChannelType)` + a filtered `UNIQUE(Endpoint)` backstop; `NotificationChannelRepository.SetWebPushAsync`
+  transfers a re-registered push endpoint to the new owner (cross-account leak guard); `AlertRule` (JSON arrays +
+  string enums, `aiDigestEnabled` inert); `TelegramPairingToken` (unique token).
 
 ## Database (dev/test)
 Integration tests target LocalDB `(localdb)\MSSQLLocalDB` (no Docker). Apply migrations manually with:
