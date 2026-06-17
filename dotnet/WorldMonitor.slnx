@@ -8,6 +8,7 @@
     <Project Path="src/WorldMonitor.Providers/WorldMonitor.Providers.csproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/WorldMonitor.Api.Tests/WorldMonitor.Api.Tests.csproj" />
     <Project Path="test/WorldMonitor.Caching.Tests/WorldMonitor.Caching.Tests.csproj" />
     <Project Path="test/WorldMonitor.Contracts.Tests/WorldMonitor.Contracts.Tests.csproj" />
     <Project Path="test/WorldMonitor.Data.Tests/WorldMonitor.Data.Tests.csproj" />

@@ -18,8 +18,8 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<ICacheStore, SqlServerCacheStore>();
 builder.Services.AddScoped<IWorldMonitorCache, WorldMonitorCache>();
 
-// Upstream provider (no API key needed).
-builder.Services.AddHttpClient<UsgsEarthquakeProvider>(c => c.BaseAddress = new Uri("https://earthquake.usgs.gov/"));
+// Upstream provider (no API key needed) — registered behind IEarthquakeProvider so it's swappable in tests.
+builder.Services.AddHttpClient<IEarthquakeProvider, UsgsEarthquakeProvider>(c => c.BaseAddress = new Uri("https://earthquake.usgs.gov/"));
 
 var app = builder.Build();
 
@@ -32,7 +32,7 @@ app.UseStaticFiles();
 
 // The golden vertical slice: USGS -> provider -> WorldMonitorCache -> SQL CacheEntries -> API.
 app.MapGet("/api/seismology/v1/list-earthquakes", async (
-    IWorldMonitorCache cache, UsgsEarthquakeProvider usgs, double? min_magnitude) =>
+    IWorldMonitorCache cache, IEarthquakeProvider usgs, double? min_magnitude) =>
 {
     var data = await cache.GetOrSetAsync(
         "seismology:earthquakes:all_day:v1",

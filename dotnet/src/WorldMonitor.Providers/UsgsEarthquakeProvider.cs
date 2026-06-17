@@ -8,7 +8,7 @@ namespace WorldMonitor.Providers;
 /// <summary>Fetches recent earthquakes from the public USGS GeoJSON feed (no API key required) and maps
 /// them to the shared <see cref="Earthquake"/> DTO. Registered as a typed HttpClient with BaseAddress
 /// <c>https://earthquake.usgs.gov/</c>.</summary>
-public sealed class UsgsEarthquakeProvider(HttpClient http)
+public sealed class UsgsEarthquakeProvider(HttpClient http) : IEarthquakeProvider
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
