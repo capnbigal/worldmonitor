@@ -1,5 +1,7 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Data.Entities.Identity;
+using WorldMonitor.Data.Time;
 
 namespace WorldMonitor.Data.Repositories;
 
@@ -11,7 +13,8 @@ public readonly record struct PreferenceSetResult(bool Ok, int SyncVersion)
     public static PreferenceSetResult Conflict(int actualVersion) => new(false, actualVersion);
 }
 
-public sealed class UserPreferenceRepository(WorldMonitorDbContext db)
+// Domain-entity timestamps use the app-side IClock (testable); the cache store uses SYSUTCDATETIME() for freshness-as-liveness.
+public sealed class UserPreferenceRepository(WorldMonitorDbContext db, IClock clock)
 {
     /// <summary>Client-supplied compare-and-set. expectedSyncVersion 0 with no existing row inserts at v1.
     /// A mismatch returns Conflict(actualVersion) without throwing.</summary>
@@ -24,7 +27,7 @@ public sealed class UserPreferenceRepository(WorldMonitorDbContext db)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(p => p.Data, data)
                 .SetProperty(p => p.SchemaVersion, schemaVersion)
-                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow)
+                .SetProperty(p => p.UpdatedAt, clock.UtcNow)
                 .SetProperty(p => p.SyncVersion, p => p.SyncVersion + 1), ct);
 
         if (affected == 1) return PreferenceSetResult.Success(expectedSyncVersion + 1);
@@ -37,14 +40,14 @@ public sealed class UserPreferenceRepository(WorldMonitorDbContext db)
             db.UserPreferences.Add(new UserPreference
             {
                 UserId = userId, Variant = variant, Data = data,
-                SchemaVersion = schemaVersion, UpdatedAt = DateTime.UtcNow, SyncVersion = 1,
+                SchemaVersion = schemaVersion, UpdatedAt = clock.UtcNow, SyncVersion = 1,
             });
             try
             {
                 await db.SaveChangesAsync(ct);
                 return PreferenceSetResult.Success(1);
             }
-            catch (DbUpdateException) // lost the insert race on UX_UserPreferences_User_Variant
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2627 or 2601 }) // lost the insert race on UX_UserPreferences_User_Variant
             {
                 var raced = await db.UserPreferences.AsNoTracking()
                     .FirstAsync(p => p.UserId == userId && p.Variant == variant, ct);

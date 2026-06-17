@@ -1,5 +1,7 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Data.Entities.Watchlist;
+using WorldMonitor.Data.Time;
 
 namespace WorldMonitor.Data.Repositories;
 
@@ -9,7 +11,7 @@ public enum FollowResult { Followed, AlreadyFollowing, CapReached }
 /// <param name="PrivacyFloor">Follower counts below this are reported as 0 (legacy: 5).</param>
 public sealed record WatchlistOptions(int MaxPerUser = 50, int PrivacyFloor = 5);
 
-public sealed class FollowedCountryRepository(WorldMonitorDbContext db, WatchlistOptions options)
+public sealed class FollowedCountryRepository(WorldMonitorDbContext db, WatchlistOptions options, IClock clock)
 {
     private static string Norm(string country) => country.Trim().ToUpperInvariant();
 
@@ -22,13 +24,13 @@ public sealed class FollowedCountryRepository(WorldMonitorDbContext db, Watchlis
         if (await db.FollowedCountries.CountAsync(f => f.UserId == userId, ct) >= options.MaxPerUser)
             return FollowResult.CapReached;
 
-        db.FollowedCountries.Add(new FollowedCountry { UserId = userId, Country = c, AddedAt = DateTime.UtcNow });
+        db.FollowedCountries.Add(new FollowedCountry { UserId = userId, Country = c, AddedAt = clock.UtcNow });
         try
         {
             await db.SaveChangesAsync(ct);
             return FollowResult.Followed;
         }
-        catch (DbUpdateException) // concurrent duplicate lost the unique race
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2627 or 2601 }) // concurrent duplicate lost the unique race
         {
             return FollowResult.AlreadyFollowing;
         }

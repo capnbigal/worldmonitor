@@ -1,4 +1,5 @@
 using WorldMonitor.Data.Repositories;
+using WorldMonitor.Data.Time;
 using Xunit;
 
 namespace WorldMonitor.Data.Tests.Integration;
@@ -8,7 +9,7 @@ namespace WorldMonitor.Data.Tests.Integration;
 public class FollowedCountryTests(LocalDbFixture fx)
 {
     private static string U() => "u_" + Guid.NewGuid().ToString("N");
-    private FollowedCountryRepository Repo() => new(fx.NewContext(), new WatchlistOptions(MaxPerUser: 3, PrivacyFloor: 5));
+    private FollowedCountryRepository Repo() => new(fx.NewContext(), new WatchlistOptions(MaxPerUser: 3, PrivacyFloor: 5), new SystemClock());
 
     [Fact]
     public async Task Follow_is_idempotent_and_case_insensitive()
