@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Data.Entities;
 using WorldMonitor.Data.Entities.Access;
 using WorldMonitor.Data.Entities.Identity;
+using WorldMonitor.Data.Entities.Ml;
 using WorldMonitor.Data.Entities.Notifications;
 using WorldMonitor.Data.Entities.Waitlist;
 using WorldMonitor.Data.Entities.Watchlist;
@@ -23,6 +24,11 @@ public class WorldMonitorDbContext(DbContextOptions<WorldMonitorDbContext> optio
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<EmailSuppression> EmailSuppressions => Set<EmailSuppression>();
     public DbSet<UserApiKey> UserApiKeys => Set<UserApiKey>();
+    public DbSet<VectorEntry> Vectors => Set<VectorEntry>();
+    public DbSet<DedupSeen> DedupSeen => Set<DedupSeen>();
+    public DbSet<TopicVelocityPoint> TopicVelocityPoints => Set<TopicVelocityPoint>();
+    public DbSet<CorrelationState> CorrelationStates => Set<CorrelationState>();
+    public DbSet<CorrelationClusterState> CorrelationClusterStates => Set<CorrelationClusterState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
