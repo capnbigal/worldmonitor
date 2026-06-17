@@ -1,0 +1,71 @@
+@page "/trending-crypto"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Trending Crypto</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Most-searched coins on CoinGecko</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_coins is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_coins" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Coin</MudTh>
+            <MudTh Style="text-align:right">Rank</MudTh>
+            <MudTh Style="text-align:right">Price (USD)</MudTh>
+            <MudTh Style="width:120px">24h</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Coin"><b>@context.Symbol</b> · @context.Name</MudTd>
+            <MudTd DataLabel="Rank" Style="text-align:right">@(context.MarketCapRank?.ToString() ?? "—")</MudTd>
+            <MudTd DataLabel="Price" Style="text-align:right">@context.Price.ToString(context.Price < 1 ? "N6" : "N2")</MudTd>
+            <MudTd DataLabel="24h">
+                <MudChip T="string" Size="Size.Small" Color="@((context.ChangePercent24h ?? 0) >= 0 ? Color.Success : Color.Error)">
+                    @((context.ChangePercent24h ?? 0).ToString("0.0"))%
+                </MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_coins.Count coins</MudText>
+}
+
+@code {
+    private IReadOnlyList<TrendingCoin>? _coins;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListTrendingCoinsResponse>("api/market/v1/trending-coins");
+            _coins = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

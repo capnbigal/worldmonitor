@@ -1,0 +1,72 @@
+@page "/clock"
+@implements IDisposable
+
+<MudText Typo="Typo.h4" GutterBottom="true">World Clock</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Current local time in major cities (computed in the browser; no network needed).</MudText>
+
+<MudTable Items="_cities" Dense="true" Hover="true" Striped="true">
+    <HeaderContent>
+        <MudTh>City</MudTh>
+        <MudTh Style="width:160px">Local time</MudTh>
+        <MudTh Style="width:160px">Date</MudTh>
+        <MudTh Style="width:120px">UTC offset</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="City"><b>@context.City</b></MudTd>
+        <MudTd DataLabel="Local time">@LocalTime(context).ToString("HH:mm:ss")</MudTd>
+        <MudTd DataLabel="Date">@LocalTime(context).ToString("ddd, dd MMM")</MudTd>
+        <MudTd DataLabel="UTC offset">@Offset(context)</MudTd>
+    </RowTemplate>
+</MudTable>
+<MudText Typo="Typo.caption" Class="mt-2">Updated every second · @DateTimeOffset.UtcNow.ToString("HH:mm:ss 'UTC'")</MudText>
+
+@code {
+    private sealed record City(string Name, string ZoneId);
+
+    private static readonly IReadOnlyList<(string City, string ZoneId)> _cities =
+    [
+        ("Los Angeles", "America/Los_Angeles"),
+        ("New York", "America/New_York"),
+        ("São Paulo", "America/Sao_Paulo"),
+        ("London", "Europe/London"),
+        ("Paris", "Europe/Paris"),
+        ("Moscow", "Europe/Moscow"),
+        ("Dubai", "Asia/Dubai"),
+        ("Mumbai", "Asia/Kolkata"),
+        ("Singapore", "Asia/Singapore"),
+        ("Beijing", "Asia/Shanghai"),
+        ("Tokyo", "Asia/Tokyo"),
+        ("Sydney", "Australia/Sydney"),
+        ("UTC", "UTC"),
+    ];
+
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        // Tick once a second; InvokeAsync marshals the re-render onto the renderer's sync context.
+        _timer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+
+    private static DateTimeOffset LocalTime((string City, string ZoneId) c)
+    {
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(c.ZoneId);
+            return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return DateTimeOffset.UtcNow;
+        }
+    }
+
+    private static string Offset((string City, string ZoneId) c)
+    {
+        var off = LocalTime(c).Offset;
+        var sign = off < TimeSpan.Zero ? "-" : "+";
+        return $"UTC{sign}{off:hh\\:mm}";
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -1,0 +1,72 @@
+@page "/energy"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">UK Grid Energy Mix</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Live electricity generation mix for Great Britain (National Grid ESO carbon-intensity API)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Fuel</MudTh>
+            <MudTh Style="width:120px">Share</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Fuel">@context.Fuel</MudTd>
+            <MudTd DataLabel="Share">
+                <MudChip T="string" Size="Size.Small" Color="@FuelColor(context.Fuel)">@context.Percent.ToString("0.0")%</MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count fuels</MudText>
+}
+
+@code {
+    private IReadOnlyList<GenerationFuel>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListEnergyMixResponse>("api/energy/v1/uk-mix");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color FuelColor(string fuel) => fuel.ToLowerInvariant() switch
+    {
+        "wind" or "solar" or "hydro" or "biomass" or "nuclear" => Color.Success,
+        "coal" or "gas" => Color.Error,
+        _ => Color.Default,
+    };
+}
