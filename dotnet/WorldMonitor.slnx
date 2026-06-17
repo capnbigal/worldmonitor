@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/WorldMonitor.Api/WorldMonitor.Api.csproj" />
     <Project Path="src/WorldMonitor.Caching/WorldMonitor.Caching.csproj" />
+    <Project Path="src/WorldMonitor.Client/WorldMonitor.Client.csproj" />
     <Project Path="src/WorldMonitor.Contracts/WorldMonitor.Contracts.csproj" />
     <Project Path="src/WorldMonitor.Data/WorldMonitor.Data.csproj" />
+    <Project Path="src/WorldMonitor.Providers/WorldMonitor.Providers.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/WorldMonitor.Caching.Tests/WorldMonitor.Caching.Tests.csproj" />
