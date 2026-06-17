@@ -33,7 +33,18 @@ public sealed class WorldMonitorCache(ICacheStore store, IClock clock) : IWorldM
         var lazy = _inflight.GetOrAdd(key, k => new Lazy<Task<object?>>(
             () => FetchAndStoreAsync(k, ttl, fetcher, negTtl, timeout, hadReadError, ct),
             LazyThreadSafetyMode.ExecutionAndPublication));
-        return (T?)await lazy.Value;
+        try
+        {
+            // A key must always be used with the same T; reusing it with a different type
+            // would throw InvalidCastException here.
+            return (T?)await lazy.Value;
+        }
+        finally
+        {
+            // Value-keyed removal: clear the in-flight slot only if it is still THIS fetch,
+            // so a newer fetch for the same key is never evicted.
+            _inflight.TryRemove(new KeyValuePair<string, Lazy<Task<object?>>>(key, lazy));
+        }
     }
 
     private async Task<object?> FetchAndStoreAsync<T>(
@@ -61,10 +72,6 @@ public sealed class WorldMonitorCache(ICacheStore store, IClock clock) : IWorldM
             await TryUpsertAsync(key, CacheConstants.NegativeSentinel, errTtl, ct);
             throw; // legacy cachedFetchJson re-throws on fetcher error (does NOT serve last-good)
         }
-        finally
-        {
-            _inflight.TryRemove(key, out _);
-        }
     }
 
     private async Task<bool> TryUpsertAsync(string key, string value, TimeSpan ttl, CancellationToken ct)
@@ -87,10 +94,17 @@ public sealed class WorldMonitorCache(ICacheStore store, IClock clock) : IWorldM
         using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var delay = Task.Delay(timeout, delayCts.Token);
         if (await Task.WhenAny(fetch, delay) == delay && !fetch.IsCompleted)
+        {
+            ObserveOrphan(fetch); // abandoned fetch keeps running; observe a late fault so it isn't unobserved
             throw new TimeoutException($"cache fetcher timeout after {timeout.TotalMilliseconds}ms for \"{key}\"");
+        }
         await delayCts.CancelAsync(); // fetch won — stop the timer instead of leaking it until it fires
         return await fetch;           // observe the real result/exception
     }
+
+    private static void ObserveOrphan<T>(Task<T> task) =>
+        _ = task.ContinueWith(static t => { _ = t.Exception; },
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, WmJson.Options);
     private static T Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, WmJson.Options)!;
