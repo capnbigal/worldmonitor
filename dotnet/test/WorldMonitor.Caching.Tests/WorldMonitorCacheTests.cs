@@ -52,4 +52,26 @@ public class WorldMonitorCacheTests
 
         Assert.Equal(2, calls);
     }
+
+    [Fact]
+    public async Task Concurrent_misses_for_same_key_run_fetcher_once()
+    {
+        var (cache, _, _) = New();
+        var calls = 0;
+        var gate = new TaskCompletionSource();
+        Func<CancellationToken, Task<Doc?>> fetch = async _ =>
+        {
+            Interlocked.Increment(ref calls);
+            await gate.Task;                 // hold all callers inside the single fetch
+            return new Doc("v");
+        };
+
+        var callers = Enumerable.Range(0, 12)
+            .Select(_ => cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), fetch)).ToArray();
+        gate.SetResult();
+        var results = await Task.WhenAll(callers);
+
+        Assert.Equal(1, calls);                               // exactly one upstream fetch
+        Assert.All(results, r => Assert.Equal("v", r!.V));
+    }
 }
