@@ -1,0 +1,17 @@
+{
+  "earthquakes": [
+    {
+      "id": "us7000abcd",
+      "place": "10 km SW of Anchorage, Alaska",
+      "magnitude": 5.2,
+      "depthKm": 34.1,
+      "location": { "latitude": 61.12, "longitude": -149.9 },
+      "occurredAt": 1718530000000,
+      "sourceUrl": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd",
+      "nearTestSite": false,
+      "concernScore": 42.5,
+      "concernLevel": "moderate"
+    }
+  ],
+  "pagination": { "nextCursor": "", "totalCount": 1 }
+}

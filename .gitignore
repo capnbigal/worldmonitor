@@ -83,3 +83,7 @@ tmp/
 docs/plans/
 docs/brainstorms/
 playground-pricing.html
+
+# .NET build artifacts
+dotnet/**/bin/
+dotnet/**/obj/

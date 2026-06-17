@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WorldMonitor.Contracts/WorldMonitor.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/WorldMonitor.Contracts.Tests/WorldMonitor.Contracts.Tests.csproj" />
+  </Folder>
+</Solution>
