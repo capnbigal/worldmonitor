@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Data.Entities.Ml;
 using WorldMonitor.Data.Repositories;
 using WorldMonitor.Data.Tests.Fakes;
@@ -40,14 +41,22 @@ public class MlStateTests(LocalDbFixture fx)
     }
 
     [Fact]
-    public async Task Correlation_state_is_null_on_cold_start_then_round_trips()
+    public async Task Correlation_state_is_null_on_cold_start()
     {
-        var clock = new TestClock();
-        // A dedicated DB per other tests means a fresh CorrelationStates table is empty at cold start.
-        var repo = new CorrelationStateRepository(fx.NewContext(), clock);
-        // Save then read (single-row); the saved snapshot round-trips.
+        // Force the cold-start condition in the shared LocalDB (MlStateTests is the only writer).
+        await using (var ctx = fx.NewContext())
+            await ctx.CorrelationStates.ExecuteDeleteAsync();
+
+        var latest = await new CorrelationStateRepository(fx.NewContext(), new TestClock()).GetLatestAsync();
+        Assert.Null(latest); // no prior cycle ⇒ the engine emits nothing on first run
+    }
+
+    [Fact]
+    public async Task Correlation_state_round_trips_the_single_row_snapshot()
+    {
+        var repo = new CorrelationStateRepository(fx.NewContext(), new TestClock());
         await repo.SaveAsync("{\"n\":1}", "{\"m\":2}", "{\"p\":3}");
-        var latest = await new CorrelationStateRepository(fx.NewContext(), clock).GetLatestAsync();
+        var latest = await new CorrelationStateRepository(fx.NewContext(), new TestClock()).GetLatestAsync();
         Assert.NotNull(latest);
         Assert.Equal("{\"n\":1}", latest!.NewsVelocity);
     }

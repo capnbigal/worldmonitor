@@ -21,6 +21,8 @@ public sealed class DedupRepository(WorldMonitorDbContext db, IClock clock)
     public static TimeSpan TtlFor(string signalType) => Ttls.GetValueOrDefault(signalType, DefaultTtl);
 
     /// <summary>Marks a signal seen. Returns true if newly marked; false if it was seen within its TTL.</summary>
+    /// <remarks>Caller contract: <paramref name="signalType"/> must match the type encoded in
+    /// <paramref name="dedupKey"/> (legacy keys are "{type}:{identifier}"); the per-type TTL is keyed on it.</remarks>
     public async Task<bool> TryMarkSeenAsync(string dedupKey, string signalType, CancellationToken ct = default)
     {
         var now = clock.UtcNow;
