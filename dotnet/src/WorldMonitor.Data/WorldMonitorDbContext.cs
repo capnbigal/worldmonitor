@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Data.Entities;
+using WorldMonitor.Data.Entities.Access;
 using WorldMonitor.Data.Entities.Identity;
 using WorldMonitor.Data.Entities.Notifications;
+using WorldMonitor.Data.Entities.Waitlist;
 using WorldMonitor.Data.Entities.Watchlist;
 
 namespace WorldMonitor.Data;
@@ -15,6 +17,12 @@ public class WorldMonitorDbContext(DbContextOptions<WorldMonitorDbContext> optio
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<TelegramPairingToken> TelegramPairingTokens => Set<TelegramPairingToken>();
+    public DbSet<Registration> Registrations => Set<Registration>();
+    public DbSet<UserReferralCode> UserReferralCodes => Set<UserReferralCode>();
+    public DbSet<UserReferralCredit> UserReferralCredits => Set<UserReferralCredit>();
+    public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+    public DbSet<EmailSuppression> EmailSuppressions => Set<EmailSuppression>();
+    public DbSet<UserApiKey> UserApiKeys => Set<UserApiKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
