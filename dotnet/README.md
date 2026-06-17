@@ -20,6 +20,10 @@ Coexists with the legacy TypeScript tree during migration.
   `UNIQUE(UserId,ChannelType)` + a filtered `UNIQUE(Endpoint)` backstop; `NotificationChannelRepository.SetWebPushAsync`
   transfers a re-registered push endpoint to the new owner (cross-account leak guard); `AlertRule` (JSON arrays +
   string enums, `aiDigestEnabled` inert); `TelegramPairingToken` (unique token).
+- `src/WorldMonitor.Data` (P1b-3) — Waitlist/Access: `Registration` (IDENTITY-based waitlist position,
+  unique `NormalizedEmail`; broadcast wave fields dropped), `UserReferralCode`/`UserReferralCredit`,
+  `ContactMessage`, `UserApiKey` (unique `KeyHash`, no premium gate), `EmailSuppression`.
+  `RegistrationRepository.RegisterAsync` is idempotent and reads `EmailSuppression`. **Completes the P1b domain model.**
 
 ## Database (dev/test)
 Integration tests target LocalDB `(localdb)\MSSQLLocalDB` (no Docker). Apply migrations manually with:
