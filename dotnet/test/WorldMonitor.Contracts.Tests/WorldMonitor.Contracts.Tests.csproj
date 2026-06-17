@@ -22,4 +22,10 @@
     <ProjectReference Include="..\..\src\WorldMonitor.Contracts\WorldMonitor.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures/seismology-list-earthquakes.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
