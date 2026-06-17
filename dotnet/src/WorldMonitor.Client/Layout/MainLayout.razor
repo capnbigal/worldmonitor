@@ -1,0 +1,20 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.Public" Class="mr-3" />
+        <MudText Typo="Typo.h6">World Monitor</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption">.NET 10 · Blazor WebAssembly</MudText>
+    </MudAppBar>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

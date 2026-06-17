@@ -1,0 +1,89 @@
+@page "/"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Live Earthquakes</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    USGS feed (past 24 hours), fetched through the World Monitor SQL cache layer.
+</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_quakes is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_quakes" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh Style="width:120px">Magnitude</MudTh>
+            <MudTh>Place</MudTh>
+            <MudTh Style="width:120px">Depth (km)</MudTh>
+            <MudTh Style="width:200px">Time (UTC)</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Magnitude">
+                <MudChip T="string" Color="@MagColor(context.Magnitude)" Size="Size.Small">
+                    @context.Magnitude.ToString("0.0")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Place">
+                @if (!string.IsNullOrEmpty(context.SourceUrl))
+                {
+                    <MudLink Href="@context.SourceUrl" Target="_blank">@context.Place</MudLink>
+                }
+                else
+                {
+                    @context.Place
+                }
+            </MudTd>
+            <MudTd DataLabel="Depth">@context.DepthKm.ToString("0.0")</MudTd>
+            <MudTd DataLabel="Time">@DateTimeOffset.FromUnixTimeMilliseconds(context.OccurredAt).UtcDateTime.ToString("u")</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_quakes.Count events</MudText>
+}
+
+@code {
+    private IReadOnlyList<Earthquake>? _quakes;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListEarthquakesResponse>("api/seismology/v1/list-earthquakes");
+            _quakes = (resp?.Earthquakes ?? [])
+                .OrderByDescending(e => e.Magnitude)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color MagColor(double mag) => mag switch
+    {
+        >= 6.0 => Color.Error,
+        >= 4.5 => Color.Warning,
+        >= 2.5 => Color.Info,
+        _ => Color.Default,
+    };
+}
