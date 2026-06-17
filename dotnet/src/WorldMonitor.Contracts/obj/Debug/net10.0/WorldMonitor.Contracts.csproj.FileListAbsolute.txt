@@ -1,0 +1,12 @@
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\bin\Debug\net10.0\WorldMonitor.Contracts.deps.json
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\bin\Debug\net10.0\WorldMonitor.Contracts.dll
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\bin\Debug\net10.0\WorldMonitor.Contracts.pdb
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.AssemblyInfoInputs.cache
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.AssemblyInfo.cs
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.csproj.CoreCompileInputs.cache
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.sourcelink.json
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.dll
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\refint\WorldMonitor.Contracts.dll
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\WorldMonitor.Contracts.pdb
+C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\obj\Debug\net10.0\ref\WorldMonitor.Contracts.dll
