@@ -1,0 +1,76 @@
+@page "/status"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Service Status</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Live status of major cloud &amp; internet services (statuspage.io)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Service</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh Style="width:120px">Indicator</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Service"><b>@context.Service</b></MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Indicator)">@context.Description</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Indicator">@context.Indicator</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count services</MudText>
+}
+
+@code {
+    private IReadOnlyList<ServiceStatus>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListServiceStatusResponse>("api/status/v1/services");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color StatusColor(string indicator) => indicator switch
+    {
+        "none" => Color.Success,
+        "minor" => Color.Warning,
+        "major" => Color.Error,
+        "critical" => Color.Error,
+        _ => Color.Default,
+    };
+}

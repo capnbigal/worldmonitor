@@ -1,0 +1,67 @@
+@page "/weather"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Global Weather</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Current conditions in major cities via Open-Meteo.</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_cities is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_cities" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>City</MudTh>
+            <MudTh Style="text-align:right">Temp</MudTh>
+            <MudTh Style="text-align:right">Wind</MudTh>
+            <MudTh>Condition</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="City"><b>@context.City</b></MudTd>
+            <MudTd DataLabel="Temp" Style="text-align:right">@(context.TemperatureC.ToString("0.0") + " °C")</MudTd>
+            <MudTd DataLabel="Wind" Style="text-align:right">@(context.WindKph.ToString("0") + " km/h")</MudTd>
+            <MudTd DataLabel="Condition">@context.Condition</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_cities.Count cities</MudText>
+}
+
+@code {
+    private IReadOnlyList<CityWeather>? _cities;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListWeatherResponse>("api/weather/v1/cities");
+            _cities = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

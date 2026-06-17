@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
+using WorldMonitor.Contracts.AirQuality;
+using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
@@ -9,6 +11,8 @@ using WorldMonitor.Contracts.Seismology;
 using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
+using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Weather;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
 using WorldMonitor.Data.Time;
@@ -68,6 +72,23 @@ builder.Services.AddHttpClient<IIntelProvider, GdeltIntelProvider>(c =>
 builder.Services.AddHttpClient<ISpaceWeatherProvider, NoaaSpaceWeatherProvider>(c =>
 {
     c.BaseAddress = new Uri("https://services.swpc.noaa.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IWeatherProvider, OpenMeteoWeatherProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.open-meteo.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IAirQualityProvider, OpenMeteoAirQualityProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://air-quality-api.open-meteo.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+// Service status fetches absolute status-page URLs across many hosts, so no BaseAddress.
+builder.Services.AddHttpClient<IServiceStatusProvider, StatusPageProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
+builder.Services.AddHttpClient<IDisplacementProvider, UnhcrDisplacementProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.unhcr.org/");
     c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
 
@@ -167,6 +188,46 @@ app.MapGet("/api/space/v1/kp-index", async (IWorldMonitorCache cache, ISpaceWeat
         TimeSpan.FromMinutes(30),
         async ct => new ListKpResponse { Items = await space.FetchAsync(24, ct) });
     return Results.Json(data ?? new ListKpResponse(), WmJson.Options);
+});
+
+// Global weather — current conditions for major cities (Open-Meteo), cached 15 min.
+app.MapGet("/api/weather/v1/cities", async (IWorldMonitorCache cache, IWeatherProvider weather) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "weather:cities:v1",
+        TimeSpan.FromMinutes(15),
+        async ct => new ListWeatherResponse { Items = await weather.FetchAsync(14, ct) });
+    return Results.Json(data ?? new ListWeatherResponse(), WmJson.Options);
+});
+
+// Air quality — European AQI & particulates for major cities (Open-Meteo), cached 30 min.
+app.MapGet("/api/air-quality/v1/cities", async (IWorldMonitorCache cache, IAirQualityProvider air) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "airquality:cities:v1",
+        TimeSpan.FromMinutes(30),
+        async ct => new ListAirQualityResponse { Items = await air.FetchAsync(14, ct) });
+    return Results.Json(data ?? new ListAirQualityResponse(), WmJson.Options);
+});
+
+// Service status — statuspage.io summaries for major cloud/internet services, cached 5 min.
+app.MapGet("/api/status/v1/services", async (IWorldMonitorCache cache, IServiceStatusProvider status) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "status:services:v1",
+        TimeSpan.FromMinutes(5),
+        async ct => new ListServiceStatusResponse { Items = await status.FetchAsync(12, ct) });
+    return Results.Json(data ?? new ListServiceStatusResponse(), WmJson.Options);
+});
+
+// Forced displacement — refugees/asylum-seekers/IDPs by country of origin (UNHCR), cached 24 hours.
+app.MapGet("/api/displacement/v1/by-country", async (IWorldMonitorCache cache, IDisplacementProvider displacement) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "displacement:country:v1",
+        TimeSpan.FromHours(24),
+        async ct => new ListDisplacementResponse { Items = await displacement.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListDisplacementResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");
