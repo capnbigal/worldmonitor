@@ -1,0 +1,69 @@
+@page "/economy"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Global Economy</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">GDP growth, annual % — latest available (World Bank)</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Country</MudTh>
+            <MudTh Style="width:140px">GDP Growth</MudTh>
+            <MudTh Style="width:100px">Year</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Country">@context.Country</MudTd>
+            <MudTd DataLabel="GDP Growth">
+                <MudChip T="string" Size="Size.Small" Color="@(context.GrowthPercent >= 0 ? Color.Success : Color.Error)">
+                    @context.GrowthPercent.ToString("0.0")%
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Year">@context.Year</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count economies</MudText>
+}
+
+@code {
+    private IReadOnlyList<EconomyIndicator>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListEconomyResponse>("api/economy/v1/gdp-growth");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
