@@ -76,7 +76,7 @@ public abstract class NotificationChannel
 {
     public int Id { get; set; }
     public required string UserId { get; set; }
-    public string ChannelType { get; set; } = "";   // discriminator — EF sets it from the concrete type
+    public string ChannelType { get; set; } = null!; // discriminator — MUST be null! (not ""): EF will not override a non-null property initializer, so "" would collapse every type onto one discriminator value
     public bool Verified { get; set; }
     public DateTime LinkedAt { get; set; }
 }
