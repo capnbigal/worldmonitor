@@ -1,0 +1,90 @@
+@page "/natural"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Natural Events</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">Open events (wildfires, storms, volcanoes…) from NASA EONET, via the World Monitor cache.</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_events is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_events" Dense="true" Hover="true" Striped="true" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh Style="width:160px">Category</MudTh>
+            <MudTh>Event</MudTh>
+            <MudTh Style="width:200px">Date (UTC)</MudTh>
+            <MudTh Style="width:150px">Location</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Category">
+                <MudChip T="string" Size="Size.Small" Color="@CatColor(context.Category)">@(context.Category ?? "—")</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Event">
+                @if (!string.IsNullOrEmpty(context.Link))
+                {
+                    <MudLink Href="@context.Link" Target="_blank">@context.Title</MudLink>
+                }
+                else
+                {
+                    @context.Title
+                }
+            </MudTd>
+            <MudTd DataLabel="Date">@(context.Date?.ToString("u") ?? "—")</MudTd>
+            <MudTd DataLabel="Location">
+                @(context.Latitude is { } la && context.Longitude is { } lo ? $"{la:0.0}, {lo:0.0}" : "—")
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_events.Count events</MudText>
+}
+
+@code {
+    private IReadOnlyList<NaturalEvent>? _events;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListNaturalEventsResponse>("api/natural/v1/events");
+            _events = resp?.Events ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color CatColor(string? category) => category switch
+    {
+        "Wildfires" => Color.Error,
+        "Volcanoes" => Color.Error,
+        "Severe Storms" => Color.Warning,
+        "Sea and Lake Ice" => Color.Info,
+        "Floods" => Color.Info,
+        _ => Color.Default,
+    };
+}

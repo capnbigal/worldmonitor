@@ -34,13 +34,9 @@ public sealed class SeismologyApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Default"] =
-                @"Server=(localdb)\MSSQLLocalDB;Database=WorldMonitorApiTest;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False",
-        }));
         builder.ConfigureServices(services =>
         {
+            services.UseTestDatabase();                                      // isolate from the dev DB
             services.RemoveAll<IEarthquakeProvider>();                       // drop the real USGS HttpClient
             services.AddSingleton<IEarthquakeProvider, FakeEarthquakeProvider>(); // singleton ⇒ CallCount aggregates across requests
         });
@@ -57,6 +53,7 @@ public sealed class SeismologyApiFactory : WebApplicationFactory<Program>
 }
 
 [Trait("Category", "Integration")]
+[Collection(ApiIntegrationCollection.Name)]
 public sealed class SeismologyEndpointTests(SeismologyApiFactory factory) : IClassFixture<SeismologyApiFactory>
 {
     [Fact]
