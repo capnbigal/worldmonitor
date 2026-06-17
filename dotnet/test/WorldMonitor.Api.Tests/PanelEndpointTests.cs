@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using WorldMonitor.Contracts.AirQuality;
+using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Intel;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
@@ -12,6 +14,8 @@ using WorldMonitor.Contracts.News;
 using WorldMonitor.Contracts.Security;
 using WorldMonitor.Contracts.Sentiment;
 using WorldMonitor.Contracts.Space;
+using WorldMonitor.Contracts.Status;
+using WorldMonitor.Contracts.Weather;
 using WorldMonitor.Data;
 using WorldMonitor.Providers;
 using Xunit;
@@ -81,6 +85,42 @@ public sealed class FakeSpaceWeatherProvider : ISpaceWeatherProvider
         ]);
 }
 
+public sealed class FakeWeatherProvider : IWeatherProvider
+{
+    public Task<IReadOnlyList<CityWeather>> FetchAsync(int count = 14, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CityWeather>>(
+        [
+            new CityWeather { City = "London", TemperatureC = 23.9, WindKph = 18.7, Condition = "Partly cloudy" },
+        ]);
+}
+
+public sealed class FakeAirQualityProvider : IAirQualityProvider
+{
+    public Task<IReadOnlyList<CityAirQuality>> FetchAsync(int count = 14, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CityAirQuality>>(
+        [
+            new CityAirQuality { City = "London", Aqi = 20, Pm25 = 4.2, Pm10 = 6.5 },
+        ]);
+}
+
+public sealed class FakeServiceStatusProvider : IServiceStatusProvider
+{
+    public Task<IReadOnlyList<ServiceStatus>> FetchAsync(int count = 12, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<ServiceStatus>>(
+        [
+            new ServiceStatus { Service = "GitHub", Indicator = "none", Description = "All Systems Operational" },
+        ]);
+}
+
+public sealed class FakeDisplacementProvider : IDisplacementProvider
+{
+    public Task<IReadOnlyList<DisplacementByCountry>> FetchAsync(int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DisplacementByCountry>>(
+        [
+            new DisplacementByCountry { Country = "Afghanistan", Refugees = 5_766_586, AsylumSeekers = 384_732, Idps = 3_199_710 },
+        ]);
+}
+
 public sealed class PanelApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -102,6 +142,14 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IIntelProvider, FakeIntelProvider>();
             services.RemoveAll<ISpaceWeatherProvider>();                 // drop the real NOAA HttpClient
             services.AddSingleton<ISpaceWeatherProvider, FakeSpaceWeatherProvider>();
+            services.RemoveAll<IWeatherProvider>();                      // drop the real Open-Meteo HttpClient
+            services.AddSingleton<IWeatherProvider, FakeWeatherProvider>();
+            services.RemoveAll<IAirQualityProvider>();                   // drop the real Open-Meteo air-quality HttpClient
+            services.AddSingleton<IAirQualityProvider, FakeAirQualityProvider>();
+            services.RemoveAll<IServiceStatusProvider>();                // drop the real statuspage.io HttpClient
+            services.AddSingleton<IServiceStatusProvider, FakeServiceStatusProvider>();
+            services.RemoveAll<IDisplacementProvider>();                 // drop the real UNHCR HttpClient
+            services.AddSingleton<IDisplacementProvider, FakeDisplacementProvider>();
         });
     }
 
@@ -205,5 +253,57 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         Assert.NotNull(resp);
         var item = Assert.Single(resp!.Items);
         Assert.Equal(5.0, item.Kp);
+    }
+
+    [Fact]
+    public async Task Weather_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListWeatherResponse>("api/weather/v1/cities");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("London", item.City);
+        Assert.Equal("Partly cloudy", item.Condition);
+    }
+
+    [Fact]
+    public async Task Air_quality_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListAirQualityResponse>("api/air-quality/v1/cities");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("London", item.City);
+        Assert.Equal(20, item.Aqi);
+    }
+
+    [Fact]
+    public async Task Service_status_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListServiceStatusResponse>("api/status/v1/services");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("GitHub", item.Service);
+        Assert.Equal("none", item.Indicator);
+    }
+
+    [Fact]
+    public async Task Displacement_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListDisplacementResponse>("api/displacement/v1/by-country");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Afghanistan", item.Country);
+        Assert.Equal(5_766_586, item.Refugees);
     }
 }

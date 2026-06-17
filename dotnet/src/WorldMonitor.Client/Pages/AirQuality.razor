@@ -1,0 +1,89 @@
+@page "/air-quality"
+@inject HttpClient Http
+
+<MudText Typo="Typo.h4" GutterBottom="true">Air Quality</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">European AQI &amp; particulates in major cities via Open-Meteo</MudText>
+
+<MudButton OnClick="Load" Variant="Variant.Filled" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" Class="mb-4">
+    @(_loading ? "Loading…" : "Refresh")
+</MudButton>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">
+        Couldn't load data: @_error
+        <div><MudText Typo="Typo.caption">Tip: launch the API host (<code>dotnet run --project dotnet/src/WorldMonitor.Api</code>), not the Client project.</MudText></div>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_items" Dense="true" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>City</MudTh>
+            <MudTh Style="width:200px">AQI</MudTh>
+            <MudTh Style="text-align:right">PM2.5</MudTh>
+            <MudTh Style="text-align:right">PM10</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="City"><b>@context.City</b></MudTd>
+            <MudTd DataLabel="AQI">
+                <MudChip T="string" Size="Size.Small" Color="@AqiColor(context.Aqi)">@context.Aqi · @AqiLabel(context.Aqi)</MudChip>
+            </MudTd>
+            <MudTd DataLabel="PM2.5" Style="text-align:right">@context.Pm25.ToString("0.0")</MudTd>
+            <MudTd DataLabel="PM10" Style="text-align:right">@context.Pm10.ToString("0.0")</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="mt-2">@_items.Count cities</MudText>
+}
+
+@code {
+    private IReadOnlyList<CityAirQuality>? _items;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ListAirQualityResponse>("api/air-quality/v1/cities");
+            _items = resp?.Items ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color AqiColor(int aqi) => aqi switch
+    {
+        <= 20 => Color.Success,
+        <= 40 => Color.Success,
+        <= 60 => Color.Warning,
+        <= 80 => Color.Warning,
+        <= 100 => Color.Error,
+        _ => Color.Error,
+    };
+
+    private static string AqiLabel(int aqi) => aqi switch
+    {
+        <= 20 => "Good",
+        <= 40 => "Fair",
+        <= 60 => "Moderate",
+        <= 80 => "Poor",
+        <= 100 => "Very poor",
+        _ => "Extreme",
+    };
+}
