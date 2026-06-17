@@ -1,6 +1,7 @@
 node_modules/
 .idea/
 .vs/
+*.user
 dist/
 public/blog/
 .DS_Store

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
+using WorldMonitor.Contracts.Market;
+using WorldMonitor.Contracts.Natural;
 using WorldMonitor.Contracts.Seismology;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
@@ -22,8 +24,25 @@ builder.Services.AddScoped<ICacheStore, SqlServerCacheStore>();
 builder.Services.AddScoped<IWorldMonitorCache, WorldMonitorCache>();
 builder.Services.AddProblemDetails();
 
-// Upstream provider (no API key needed) — registered behind IEarthquakeProvider so it's swappable in tests.
-builder.Services.AddHttpClient<IEarthquakeProvider, UsgsEarthquakeProvider>(c => c.BaseAddress = new Uri("https://earthquake.usgs.gov/"));
+// Upstream providers (no API keys needed) — each registered behind its interface so it's swappable in tests.
+// A descriptive User-Agent is required: CoinGecko's Cloudflare front returns 403 for requests with no UA,
+// and it's good upstream etiquette for the others too.
+const string userAgent = "WorldMonitor/1.0 (+https://github.com/worldmonitor/worldmonitor)";
+builder.Services.AddHttpClient<IEarthquakeProvider, UsgsEarthquakeProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://earthquake.usgs.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IMarketProvider, CoinGeckoProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.coingecko.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<INaturalEventProvider, EonetProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://eonet.gsfc.nasa.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
 
 var app = builder.Build();
 
@@ -51,6 +70,26 @@ app.MapGet("/api/seismology/v1/list-earthquakes", async (
         quakes = quakes.Where(e => e.Magnitude >= min).ToList();
 
     return Results.Json(new ListEarthquakesResponse { Earthquakes = quakes }, WmJson.Options);
+});
+
+// Markets — top crypto by market cap (CoinGecko), cached 5 min.
+app.MapGet("/api/market/v1/top-coins", async (IWorldMonitorCache cache, IMarketProvider market) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "market:top-coins:v1",
+        TimeSpan.FromMinutes(5),
+        async ct => new ListCoinsResponse { Coins = await market.FetchTopCoinsAsync(25, ct) });
+    return Results.Json(data ?? new ListCoinsResponse(), WmJson.Options);
+});
+
+// Natural events — open events from NASA EONET, cached 15 min.
+app.MapGet("/api/natural/v1/events", async (IWorldMonitorCache cache, INaturalEventProvider natural) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "natural:events:v1",
+        TimeSpan.FromMinutes(15),
+        async ct => new ListNaturalEventsResponse { Events = await natural.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListNaturalEventsResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");
