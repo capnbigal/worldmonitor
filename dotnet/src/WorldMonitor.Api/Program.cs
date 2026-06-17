@@ -16,14 +16,21 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContext<WorldMonitorDbContext>(o => o.UseSqlServer(connectionString));
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<ICacheStore, SqlServerCacheStore>();
+// NOTE (slice simplification): WorldMonitorCache is scoped here, so its in-process coalescing + outage
+// fallback are per-request only (the durable SQL CacheEntries still gives cross-request caching). A later
+// phase should register it as a singleton backed by an IDbContextFactory for process-wide coalescing.
 builder.Services.AddScoped<IWorldMonitorCache, WorldMonitorCache>();
+builder.Services.AddProblemDetails();
 
 // Upstream provider (no API key needed) — registered behind IEarthquakeProvider so it's swappable in tests.
 builder.Services.AddHttpClient<IEarthquakeProvider, UsgsEarthquakeProvider>(c => c.BaseAddress = new Uri("https://earthquake.usgs.gov/"));
 
 var app = builder.Build();
 
-// Dev convenience: ensure the schema exists on startup.
+app.UseExceptionHandler(); // shape unhandled errors (e.g. USGS upstream down) as RFC 7807 problem responses
+
+// Dev-slice convenience: ensure the schema exists on startup. NOTE: a multi-instance / production
+// deployment should apply migrations as a separate step (CI or an init container), not on every app boot.
 using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<WorldMonitorDbContext>().Database.MigrateAsync();
 
