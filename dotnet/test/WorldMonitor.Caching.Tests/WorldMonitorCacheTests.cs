@@ -126,4 +126,36 @@ public class WorldMonitorCacheTests
         Assert.Null(r);
         Assert.Equal(0, calls);                                              // cooldown short-circuits the fetch
     }
+
+    [Fact]
+    public async Task Store_write_failure_arms_positive_fallback_served_on_next_read_error()
+    {
+        var (cache, store, _) = New();
+        store.FailWrites = true;                          // value can't persist to the store
+        var first = await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), _ => Task.FromResult<Doc?>(new Doc("v")));
+        Assert.Equal("v", first!.V);                      // caller still gets the value
+
+        store.FailReads = true;                           // now the store read also fails
+        var calls = 0;
+        var second = await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5),
+            _ => { calls++; return Task.FromResult<Doc?>(new Doc("other")); });
+
+        Assert.Equal("v", second!.V);                     // served from the isolate-local positive fallback
+        Assert.Equal(0, calls);                           // no refetch needed
+    }
+
+    [Fact]
+    public async Task Positive_fallback_expires_after_30s_cap()
+    {
+        var (cache, store, clock) = New();
+        store.FailWrites = true;
+        await cache.GetOrSetAsync("k", TimeSpan.FromMinutes(5), _ => Task.FromResult<Doc?>(new Doc("v")));
+        store.FailReads = true;
+
+        clock.Advance(TimeSpan.FromSeconds(31));           // beyond the 30s outage-positive cap
+        var calls = 0;
+        await Assert.ThrowsAnyAsync<Exception>(() => cache.GetOrSetAsync<Doc>("k", TimeSpan.FromMinutes(5),
+            _ => { calls++; throw new InvalidOperationException("still down"); }));
+        Assert.Equal(1, calls);                            // fallback expired ⇒ fetch attempted (and threw)
+    }
 }
