@@ -8,5 +8,6 @@ public enum CacheTier
     SlowBrowser,
     Static,
     Daily,
+    NoStore,
     Live,
 }

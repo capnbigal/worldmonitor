@@ -13,10 +13,11 @@ public static class TierHeaders
         [CacheTier.SlowBrowser] = "max-age=300, stale-while-revalidate=60, stale-if-error=1800",
         [CacheTier.Static]      = "public, max-age=600, s-maxage=3600, stale-while-revalidate=600, stale-if-error=14400",
         [CacheTier.Daily]       = "public, max-age=3600, s-maxage=14400, stale-while-revalidate=7200, stale-if-error=172800",
+        [CacheTier.NoStore]     = "no-store",
         [CacheTier.Live]        = "public, max-age=30, s-maxage=60, stale-while-revalidate=60, stale-if-error=300",
     }.ToFrozenDictionary();
 
-    public static readonly FrozenDictionary<CacheTier, string> CdnCacheControl = new Dictionary<CacheTier, string>
+    public static readonly FrozenDictionary<CacheTier, string?> CdnCacheControl = new Dictionary<CacheTier, string?>
     {
         [CacheTier.Fast]        = "public, s-maxage=600, stale-while-revalidate=300, stale-if-error=1200",
         [CacheTier.Medium]      = "public, s-maxage=1200, stale-while-revalidate=600, stale-if-error=1800",
@@ -24,6 +25,7 @@ public static class TierHeaders
         [CacheTier.SlowBrowser] = "public, s-maxage=900, stale-while-revalidate=60, stale-if-error=1800",
         [CacheTier.Static]      = "public, s-maxage=14400, stale-while-revalidate=3600, stale-if-error=28800",
         [CacheTier.Daily]       = "public, s-maxage=86400, stale-while-revalidate=14400, stale-if-error=172800",
+        [CacheTier.NoStore]     = null,
         [CacheTier.Live]        = "public, s-maxage=60, stale-while-revalidate=60, stale-if-error=300",
     }.ToFrozenDictionary();
 }

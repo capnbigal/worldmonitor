@@ -8,6 +8,6 @@ Coexists with the legacy TypeScript tree during migration.
 
 ## Build & test
 ```
-dotnet build dotnet/WorldMonitor.sln
-dotnet test  dotnet/WorldMonitor.sln
+dotnet build dotnet/WorldMonitor.slnx
+dotnet test  dotnet/WorldMonitor.slnx
 ```

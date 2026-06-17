@@ -22,6 +22,13 @@ public class CacheTierTests
     }
 
     [Fact]
+    public void NoStore_tier_matches_legacy_gateway()
+    {
+        Assert.Equal("no-store", TierHeaders.CacheControl[CacheTier.NoStore]);
+        Assert.Null(TierHeaders.CdnCacheControl[CacheTier.NoStore]);
+    }
+
+    [Fact]
     public void Every_tier_has_both_headers()
     {
         foreach (var tier in Enum.GetValues<CacheTier>())
