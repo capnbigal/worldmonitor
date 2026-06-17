@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
 using WorldMonitor.Contracts.AirQuality;
+using WorldMonitor.Contracts.Disasters;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
 using WorldMonitor.Contracts.Energy;
@@ -17,7 +18,9 @@ using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
 using WorldMonitor.Contracts.Tech;
 using WorldMonitor.Contracts.Trending;
+using WorldMonitor.Contracts.Volcano;
 using WorldMonitor.Contracts.Weather;
+using WorldMonitor.Contracts.WeatherAlerts;
 using WorldMonitor.Data;
 using WorldMonitor.Data.Caching;
 using WorldMonitor.Data.Time;
@@ -128,6 +131,21 @@ builder.Services.AddHttpClient<IEnergyMixProvider, UkCarbonIntensityProvider>(c 
 });
 // Tech news fetches absolute feed URLs across many hosts, so no BaseAddress.
 builder.Services.AddHttpClient<ITechNewsProvider, TechNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
+builder.Services.AddHttpClient<IDisasterProvider, GdacsDisasterProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://www.gdacs.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IVolcanoProvider, UsgsVolcanoProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://volcanoes.usgs.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddHttpClient<IWeatherAlertProvider, NwsAlertProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.weather.gov/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
 
 var app = builder.Build();
 
@@ -335,6 +353,36 @@ app.MapGet("/api/tech/v1/news", async (IWorldMonitorCache cache, ITechNewsProvid
         TimeSpan.FromMinutes(10),
         async ct => new ListNewsResponse { Items = await tech.FetchHeadlinesAsync(50, ct) });
     return Results.Json(data ?? new ListNewsResponse(), WmJson.Options);
+});
+
+// Global disasters — GDACS alerts (floods, cyclones, earthquakes, volcanoes), cached 15 min.
+app.MapGet("/api/disasters/v1/alerts", async (IWorldMonitorCache cache, IDisasterProvider disasters) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "disasters:gdacs:v1",
+        TimeSpan.FromMinutes(15),
+        async ct => new ListDisastersResponse { Items = await disasters.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListDisastersResponse(), WmJson.Options);
+});
+
+// Volcano alerts — volcanoes at elevated alert level (USGS), cached 30 min.
+app.MapGet("/api/volcano/v1/alerts", async (IWorldMonitorCache cache, IVolcanoProvider volcano) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "volcano:alerts:v1",
+        TimeSpan.FromMinutes(30),
+        async ct => new ListVolcanoAlertsResponse { Items = await volcano.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListVolcanoAlertsResponse(), WmJson.Options);
+});
+
+// US weather alerts — active severe & extreme NWS alerts, cached 5 min.
+app.MapGet("/api/weather-alerts/v1/active", async (IWorldMonitorCache cache, IWeatherAlertProvider alerts) =>
+{
+    var data = await cache.GetOrSetAsync(
+        "weather-alerts:v1",
+        TimeSpan.FromMinutes(5),
+        async ct => new ListWeatherAlertsResponse { Items = await alerts.FetchAsync(40, ct) });
+    return Results.Json(data ?? new ListWeatherAlertsResponse(), WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");

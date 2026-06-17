@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using WorldMonitor.Contracts.AirQuality;
+using WorldMonitor.Contracts.Disasters;
 using WorldMonitor.Contracts.Displacement;
 using WorldMonitor.Contracts.Economy;
 using WorldMonitor.Contracts.Energy;
@@ -20,7 +21,9 @@ using WorldMonitor.Contracts.Space;
 using WorldMonitor.Contracts.Status;
 using WorldMonitor.Contracts.Tech;
 using WorldMonitor.Contracts.Trending;
+using WorldMonitor.Contracts.Volcano;
 using WorldMonitor.Contracts.Weather;
+using WorldMonitor.Contracts.WeatherAlerts;
 using WorldMonitor.Data;
 using WorldMonitor.Providers;
 using Xunit;
@@ -189,6 +192,33 @@ public sealed class FakeTechNewsProvider : ITechNewsProvider
         ]);
 }
 
+public sealed class FakeDisasterProvider : IDisasterProvider
+{
+    public Task<IReadOnlyList<DisasterAlert>> FetchAsync(int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DisasterAlert>>(
+        [
+            new DisasterAlert { Title = "Red earthquake alert in Examplestan", AlertLevel = "Red", Link = "https://example.com/eq", At = 1_781_636_487_000 },
+        ]);
+}
+
+public sealed class FakeVolcanoProvider : IVolcanoProvider
+{
+    public Task<IReadOnlyList<VolcanoAlert>> FetchAsync(int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<VolcanoAlert>>(
+        [
+            new VolcanoAlert { Volcano = "Great Sitkin", ColorCode = "ORANGE", AlertLevel = "WATCH", Observatory = "Alaska Volcano Observatory", At = 1_781_636_487_000, Url = "https://example.com/v" },
+        ]);
+}
+
+public sealed class FakeWeatherAlertProvider : IWeatherAlertProvider
+{
+    public Task<IReadOnlyList<WeatherAlert>> FetchAsync(int count = 40, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<WeatherAlert>>(
+        [
+            new WeatherAlert { Event = "Flood Warning", Severity = "Severe", Area = "East Baton Rouge, LA", Headline = "Flood Warning issued…", At = 1_781_700_000_000 },
+        ]);
+}
+
 public sealed class PanelApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -232,6 +262,12 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEnergyMixProvider, FakeEnergyMixProvider>();
             services.RemoveAll<ITechNewsProvider>();                     // drop the real tech-RSS HttpClient
             services.AddSingleton<ITechNewsProvider, FakeTechNewsProvider>();
+            services.RemoveAll<IDisasterProvider>();                     // drop the real GDACS HttpClient
+            services.AddSingleton<IDisasterProvider, FakeDisasterProvider>();
+            services.RemoveAll<IVolcanoProvider>();                      // drop the real USGS volcano HttpClient
+            services.AddSingleton<IVolcanoProvider, FakeVolcanoProvider>();
+            services.RemoveAll<IWeatherAlertProvider>();                 // drop the real NWS HttpClient
+            services.AddSingleton<IWeatherAlertProvider, FakeWeatherAlertProvider>();
         });
     }
 
@@ -477,5 +513,43 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         Assert.NotNull(resp);
         var item = Assert.Single(resp!.Items);
         Assert.Equal("Ars Technica", item.Source);
+    }
+
+    [Fact]
+    public async Task Disasters_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListDisastersResponse>("api/disasters/v1/alerts");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Red", item.AlertLevel);
+    }
+
+    [Fact]
+    public async Task Volcano_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListVolcanoAlertsResponse>("api/volcano/v1/alerts");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Great Sitkin", item.Volcano);
+        Assert.Equal("ORANGE", item.ColorCode);
+    }
+
+    [Fact]
+    public async Task Weather_alerts_endpoint_returns_provider_data_through_the_cache()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListWeatherAlertsResponse>("api/weather-alerts/v1/active");
+
+        Assert.NotNull(resp);
+        var item = Assert.Single(resp!.Items);
+        Assert.Equal("Flood Warning", item.Event);
+        Assert.Equal("Severe", item.Severity);
     }
 }
