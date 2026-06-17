@@ -11,28 +11,31 @@ public sealed class SqlServerCacheStore(WorldMonitorDbContext db) : ICacheStore
 
     private SqlConnection Conn => (SqlConnection)db.Database.GetDbConnection();
 
-    private async Task<SqlCommand> CommandAsync(string sql, CancellationToken ct)
+    private async Task<T> WithConnectionAsync<T>(Func<SqlConnection, Task<T>> body, CancellationToken ct)
     {
-        if (Conn.State != System.Data.ConnectionState.Open) await Conn.OpenAsync(ct);
-        var cmd = Conn.CreateCommand();
-        cmd.CommandText = sql;
-        return cmd;
+        await db.Database.OpenConnectionAsync(ct);   // EF refcounts; throws here are NOT swallowed by the finally
+        try { return await body(Conn); }
+        finally { await db.Database.CloseConnectionAsync(); }
     }
 
     public async Task<CacheReadResult> ReadAsync(string key, CancellationToken ct = default)
     {
         try
         {
-            await using var cmd = await CommandAsync(
-                "SELECT Value, ExpiresAtUtc, FetchedAt, RecordCount FROM CacheEntries " +
-                "WHERE CacheKey = @k AND ExpiresAtUtc > SYSUTCDATETIME();", ct);
-            cmd.Parameters.Add(new SqlParameter("@k", key));
-            await using var r = await cmd.ExecuteReaderAsync(ct);
-            if (!await r.ReadAsync(ct)) return CacheReadResult.Miss;
-            return CacheReadResult.Hit(
-                r.GetString(0), r.GetDateTime(1),
-                r.IsDBNull(2) ? null : r.GetDateTime(2),
-                r.IsDBNull(3) ? null : r.GetInt32(3));
+            return await WithConnectionAsync(async conn =>
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText =
+                    "SELECT Value, ExpiresAtUtc, FetchedAt, RecordCount FROM CacheEntries " +
+                    "WHERE CacheKey = @k AND ExpiresAtUtc > SYSUTCDATETIME();";
+                cmd.Parameters.Add(new SqlParameter("@k", key));
+                await using var r = await cmd.ExecuteReaderAsync(ct);
+                if (!await r.ReadAsync(ct)) return CacheReadResult.Miss;
+                return CacheReadResult.Hit(
+                    r.GetString(0), r.GetDateTime(1),
+                    r.IsDBNull(2) ? null : r.GetDateTime(2),
+                    r.IsDBNull(3) ? null : r.GetInt32(3));
+            }, ct);
         }
         catch (SqlException)
         {
@@ -45,6 +48,7 @@ public sealed class SqlServerCacheStore(WorldMonitorDbContext db) : ICacheStore
         var bytes = System.Text.Encoding.Unicode.GetByteCount(e.Value);
         if (bytes > MaxBytes)
             throw new ArgumentOutOfRangeException(nameof(e), $"payload {bytes}B exceeds {MaxBytes}B cap");
+        // UTF-16 byte count aligns with the column's DATALENGTH (nvarchar = 2 bytes/char), keeping app cap and ByteLength consistent.
 
         const string sql =
             "MERGE CacheEntries WITH (HOLDLOCK) AS t " +
@@ -59,17 +63,22 @@ public sealed class SqlServerCacheStore(WorldMonitorDbContext db) : ICacheStore
         {
             try
             {
-                await using var cmd = await CommandAsync(sql, ct);
-                cmd.Parameters.Add(new SqlParameter("@k", e.Key));
-                cmd.Parameters.Add(new SqlParameter("@v", e.Value));
-                cmd.Parameters.Add(new SqlParameter("@ttl", (long)e.Ttl.TotalSeconds));
-                cmd.Parameters.Add(new SqlParameter("@fetched", (object?)e.FetchedAt ?? DBNull.Value));
-                cmd.Parameters.Add(new SqlParameter("@rc", (object?)e.RecordCount ?? DBNull.Value));
-                cmd.Parameters.Add(new SqlParameter("@state", (object?)e.State ?? DBNull.Value));
-                cmd.Parameters.Add(new SqlParameter("@sv", (object?)e.SourceVersion ?? DBNull.Value));
-                cmd.Parameters.Add(new SqlParameter("@nia", (object?)e.NewestItemAt ?? DBNull.Value));
-                cmd.Parameters.Add(new SqlParameter("@mca", (object?)e.MaxContentAgeMin ?? DBNull.Value));
-                await cmd.ExecuteNonQueryAsync(ct);
+                await WithConnectionAsync(async conn =>
+                {
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    cmd.Parameters.Add(new SqlParameter("@k", e.Key));
+                    cmd.Parameters.Add(new SqlParameter("@v", e.Value));
+                    cmd.Parameters.Add(new SqlParameter("@ttl", (long)e.Ttl.TotalSeconds));
+                    cmd.Parameters.Add(new SqlParameter("@fetched", (object?)e.FetchedAt ?? DBNull.Value));
+                    cmd.Parameters.Add(new SqlParameter("@rc", (object?)e.RecordCount ?? DBNull.Value));
+                    cmd.Parameters.Add(new SqlParameter("@state", (object?)e.State ?? DBNull.Value));
+                    cmd.Parameters.Add(new SqlParameter("@sv", (object?)e.SourceVersion ?? DBNull.Value));
+                    cmd.Parameters.Add(new SqlParameter("@nia", (object?)e.NewestItemAt ?? DBNull.Value));
+                    cmd.Parameters.Add(new SqlParameter("@mca", (object?)e.MaxContentAgeMin ?? DBNull.Value));
+                    await cmd.ExecuteNonQueryAsync(ct);
+                    return true;
+                }, ct);
                 return;
             }
             catch (SqlException ex) when (attempt < MaxRetries && SqlExceptionClassifier.IsTransient(ex))
@@ -81,24 +90,35 @@ public sealed class SqlServerCacheStore(WorldMonitorDbContext db) : ICacheStore
 
     public async Task<bool> ExtendTtlAsync(string key, TimeSpan ttl, CancellationToken ct = default)
     {
-        await using var cmd = await CommandAsync(
-            "UPDATE CacheEntries SET ExpiresAtUtc = DATEADD(second,@ttl,SYSUTCDATETIME()) " +
-            "WHERE CacheKey = @k AND ExpiresAtUtc > SYSUTCDATETIME();", ct);
-        cmd.Parameters.Add(new SqlParameter("@ttl", (long)ttl.TotalSeconds));
-        cmd.Parameters.Add(new SqlParameter("@k", key));
-        return await cmd.ExecuteNonQueryAsync(ct) > 0; // @@ROWCOUNT == 0 ⇒ no live row to extend
+        return await WithConnectionAsync(async conn =>
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                "UPDATE CacheEntries SET ExpiresAtUtc = DATEADD(second,@ttl,SYSUTCDATETIME()) " +
+                "WHERE CacheKey = @k AND ExpiresAtUtc > SYSUTCDATETIME();";
+            cmd.Parameters.Add(new SqlParameter("@ttl", (long)ttl.TotalSeconds));
+            cmd.Parameters.Add(new SqlParameter("@k", key));
+            return await cmd.ExecuteNonQueryAsync(ct) > 0; // @@ROWCOUNT == 0 ⇒ no live row to extend
+        }, ct);
     }
 
     public async Task<IReadOnlyDictionary<string, string>> ReadManyAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default)
     {
         var result = new Dictionary<string, string>();
         if (keys.Count == 0) return result;
-        var (inClause, ps) = BuildInList(keys);
-        await using var cmd = await CommandAsync(
-            $"SELECT CacheKey, Value FROM CacheEntries WHERE ExpiresAtUtc > SYSUTCDATETIME() AND CacheKey IN ({inClause});", ct);
-        cmd.Parameters.AddRange(ps);
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) result[r.GetString(0)] = r.GetString(1);
+        foreach (var chunk in keys.Chunk(1000))
+        {
+            var (inClause, ps) = BuildInList(chunk);
+            await WithConnectionAsync(async conn =>
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT CacheKey, Value FROM CacheEntries WHERE ExpiresAtUtc > SYSUTCDATETIME() AND CacheKey IN ({inClause});";
+                cmd.Parameters.AddRange(ps);
+                await using var r = await cmd.ExecuteReaderAsync(ct);
+                while (await r.ReadAsync(ct)) result[r.GetString(0)] = r.GetString(1);
+                return true;
+            }, ct);
+        }
         return result;
     }
 
@@ -106,12 +126,19 @@ public sealed class SqlServerCacheStore(WorldMonitorDbContext db) : ICacheStore
     {
         var result = new List<CachePresence>();
         if (keys.Count == 0) return result;
-        var (inClause, ps) = BuildInList(keys);
-        await using var cmd = await CommandAsync(
-            $"SELECT CacheKey, ByteLength, ExpiresAtUtc FROM CacheEntries WHERE ExpiresAtUtc > SYSUTCDATETIME() AND CacheKey IN ({inClause});", ct);
-        cmd.Parameters.AddRange(ps);
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) result.Add(new CachePresence(r.GetString(0), r.GetInt64(1), r.GetDateTime(2)));
+        foreach (var chunk in keys.Chunk(1000))
+        {
+            var (inClause, ps) = BuildInList(chunk);
+            await WithConnectionAsync(async conn =>
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT CacheKey, ByteLength, ExpiresAtUtc FROM CacheEntries WHERE ExpiresAtUtc > SYSUTCDATETIME() AND CacheKey IN ({inClause});";
+                cmd.Parameters.AddRange(ps);
+                await using var r = await cmd.ExecuteReaderAsync(ct);
+                while (await r.ReadAsync(ct)) result.Add(new CachePresence(r.GetString(0), r.GetInt64(1), r.GetDateTime(2)));
+                return true;
+            }, ct);
+        }
         return result;
     }
 

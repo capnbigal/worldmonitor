@@ -18,14 +18,10 @@ public class InMemorySeedLockTests
     public async Task Resource_can_be_reacquired_after_release()
     {
         var sut = new InMemorySeedLock();
-        (await sut.TryAcquireAsync("r")).Should();           // acquire + dispose immediately
+        var first = await sut.TryAcquireAsync("r");
+        Assert.NotNull(first);
+        await first!.DisposeAsync();
         await using var again = await sut.TryAcquireAsync("r");
         Assert.NotNull(again);
     }
-}
-
-file static class Ext
-{
-    // dispose the handle right away to model release-after-use
-    public static void Should(this ISeedLockHandle? h) { Assert.NotNull(h); h!.DisposeAsync().AsTask().Wait(); }
 }
