@@ -12,6 +12,7 @@ using WorldMonitor.Contracts.Economy;
 using WorldMonitor.Contracts.Energy;
 using WorldMonitor.Contracts.Fx;
 using WorldMonitor.Contracts.Intel;
+using WorldMonitor.Contracts.Macro;
 using WorldMonitor.Contracts.Market;
 using WorldMonitor.Contracts.Natural;
 using WorldMonitor.Contracts.News;
@@ -192,6 +193,15 @@ public sealed class FakeTechNewsProvider : ITechNewsProvider
         ]);
 }
 
+public sealed class FakeMacroProvider : IMacroProvider
+{
+    public Task<IReadOnlyList<MacroIndicator>> FetchAsync(string apiKey, int count = 20, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<MacroIndicator>>(
+        [
+            new MacroIndicator { Name = "10-Year Treasury", SeriesId = "DGS10", Value = 4.41, Date = "2026-06-13", Units = "%" },
+        ]);
+}
+
 public sealed class FakeRegionalNewsProvider : IRegionalNewsProvider
 {
     public IReadOnlyList<(string Key, string Name)> Regions => [("europe", "Europe")];
@@ -230,7 +240,7 @@ public sealed class FakeWeatherAlertProvider : IWeatherAlertProvider
         ]);
 }
 
-public sealed class PanelApiFactory : WebApplicationFactory<Program>
+public class PanelApiFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -275,6 +285,8 @@ public sealed class PanelApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<ITechNewsProvider, FakeTechNewsProvider>();
             services.RemoveAll<IRegionalNewsProvider>();                 // drop the real regional-RSS HttpClient
             services.AddSingleton<IRegionalNewsProvider, FakeRegionalNewsProvider>();
+            services.RemoveAll<IMacroProvider>();                        // drop the real FRED HttpClient
+            services.AddSingleton<IMacroProvider, FakeMacroProvider>();
             services.RemoveAll<IDisasterProvider>();                     // drop the real GDACS HttpClient
             services.AddSingleton<IDisasterProvider, FakeDisasterProvider>();
             services.RemoveAll<IVolcanoProvider>();                      // drop the real USGS volcano HttpClient
@@ -529,6 +541,20 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task Macro_endpoint_reports_not_configured_when_no_key_is_set()
+    {
+        // The default factory sets no ExternalApis:Fred key, so the endpoint must short-circuit to
+        // Configured=false without calling the (fake) provider.
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListMacroResponse>("api/macro/v1/indicators");
+
+        Assert.NotNull(resp);
+        Assert.False(resp!.Configured);
+        Assert.Empty(resp.Items);
+    }
+
+    [Fact]
     public async Task Regional_news_endpoint_returns_provider_data_for_the_requested_region()
     {
         await factory.ResetCacheAsync();
@@ -576,5 +602,35 @@ public sealed class PanelEndpointTests(PanelApiFactory factory) : IClassFixture<
         var item = Assert.Single(resp!.Items);
         Assert.Equal("Flood Warning", item.Event);
         Assert.Equal("Severe", item.Severity);
+    }
+}
+
+/// <summary>Same as <see cref="PanelApiFactory"/> but with a (fake) FRED key configured, to exercise the
+/// keyed-panel "configured" path. The key is set at the DI/options level (reliable) rather than via config.</summary>
+public sealed class MacroConfiguredApiFactory : PanelApiFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+            services.Configure<ExternalApiKeys>(o => o.Fred = "test-key"));
+    }
+}
+
+[Trait("Category", "Integration")]
+[Collection(ApiIntegrationCollection.Name)]
+public sealed class MacroConfiguredEndpointTests(MacroConfiguredApiFactory factory) : IClassFixture<MacroConfiguredApiFactory>
+{
+    [Fact]
+    public async Task Macro_endpoint_returns_data_when_key_is_configured()
+    {
+        await factory.ResetCacheAsync();
+        var client = factory.CreateClient();
+        var resp = await client.GetFromJsonAsync<ListMacroResponse>("api/macro/v1/indicators");
+
+        Assert.NotNull(resp);
+        Assert.True(resp!.Configured);
+        var item = Assert.Single(resp.Items);   // from FakeMacroProvider
+        Assert.Equal("DGS10", item.SeriesId);
     }
 }

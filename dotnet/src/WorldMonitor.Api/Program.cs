@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WorldMonitor.Caching;
 using WorldMonitor.Contracts.Json;
+using WorldMonitor.Contracts.Macro;
 using WorldMonitor.Contracts.AirQuality;
 using WorldMonitor.Contracts.Disasters;
 using WorldMonitor.Contracts.Displacement;
@@ -40,6 +42,10 @@ builder.Services.AddScoped<ICacheStore, SqlServerCacheStore>();
 // phase should register it as a singleton backed by an IDbContextFactory for process-wide coalescing.
 builder.Services.AddScoped<IWorldMonitorCache, WorldMonitorCache>();
 builder.Services.AddProblemDetails();
+
+// Optional free (registration-only) third-party API keys. Blank => the matching panel shows setup
+// instructions instead of data. Bound from the "ExternalApis" config section (or ExternalApis__* env vars).
+builder.Services.Configure<ExternalApiKeys>(builder.Configuration.GetSection("ExternalApis"));
 
 // Upstream providers (no API keys needed) — each registered behind its interface so it's swappable in tests.
 // A descriptive User-Agent is required: CoinGecko's Cloudflare front returns 403 for requests with no UA,
@@ -133,6 +139,12 @@ builder.Services.AddHttpClient<IEnergyMixProvider, UkCarbonIntensityProvider>(c 
 builder.Services.AddHttpClient<ITechNewsProvider, TechNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
 // Regional news also fetches absolute feed URLs across many hosts, so no BaseAddress.
 builder.Services.AddHttpClient<IRegionalNewsProvider, RegionalNewsProvider>(c => c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent));
+// Keyed providers (free registration-only keys; the endpoint passes the key in and gates on its presence).
+builder.Services.AddHttpClient<IMacroProvider, FredMacroProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.stlouisfed.org/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
 builder.Services.AddHttpClient<IDisasterProvider, GdacsDisasterProvider>(c =>
 {
     c.BaseAddress = new Uri("https://www.gdacs.org/");
@@ -396,6 +408,21 @@ app.MapGet("/api/weather-alerts/v1/active", async (IWorldMonitorCache cache, IWe
         TimeSpan.FromMinutes(5),
         async ct => new ListWeatherAlertsResponse { Items = await alerts.FetchAsync(40, ct) });
     return Results.Json(data ?? new ListWeatherAlertsResponse(), WmJson.Options);
+});
+
+// Macro indicators — latest values for curated FRED series. Requires a free FRED API key; when it isn't
+// configured the endpoint reports Configured=false (no upstream call) so the page can show setup steps.
+app.MapGet("/api/macro/v1/indicators", async (IWorldMonitorCache cache, IMacroProvider fred, IOptions<ExternalApiKeys> keys) =>
+{
+    var apiKey = keys.Value.Fred;
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return Results.Json(new ListMacroResponse { Configured = false }, WmJson.Options);
+
+    var data = await cache.GetOrSetAsync(
+        "macro:fred:v1",
+        TimeSpan.FromHours(6),
+        async ct => new ListMacroResponse { Items = await fred.FetchAsync(apiKey, 20, ct), Configured = true });
+    return Results.Json(data ?? new ListMacroResponse { Configured = false }, WmJson.Options);
 });
 
 app.MapFallbackToFile("index.html");
