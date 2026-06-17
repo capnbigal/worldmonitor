@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="utf-8"?>
+<coverage line-rate="0.9166" branch-rate="1" version="1.9" timestamp="1781665630" lines-covered="55" lines-valid="60" branches-covered="0" branches-valid="0">
+  <sources>
+    <source>C:\Users\capnb\source\repos\worldmonitor\dotnet\src\WorldMonitor.Contracts\</source>
+  </sources>
+  <packages>
+    <package name="WorldMonitor.Contracts" line-rate="0.9166" branch-rate="1" complexity="27">
+      <classes>
+        <class name="WorldMonitor.Contracts.Seismology.Earthquake" filename="Seismology\Earthquake.cs" line-rate="1" branch-rate="1" complexity="11">
+          <methods>
+            <method name="get_Id" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="7" hits="4" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Place" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="8" hits="5" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Magnitude" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="9" hits="3" branch="False" />
+              </lines>
+            </method>
+            <method name="get_DepthKm" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="10" hits="4" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Location" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="11" hits="2" branch="False" />
+              </lines>
+            </method>
+            <method name="get_OccurredAt" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="12" hits="4" branch="False" />
+              </lines>
+            </method>
+            <method name="get_SourceUrl" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="13" hits="5" branch="False" />
+              </lines>
+            </method>
+            <method name="get_NearTestSite" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="14" hits="4" branch="False" />
+              </lines>
+            </method>
+            <method name="get_TestSiteName" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="15" hits="2" branch="False" />
+              </lines>
+            </method>
+            <method name="get_ConcernScore" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="16" hits="3" branch="False" />
+              </lines>
+            </method>
+            <method name="get_ConcernLevel" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="17" hits="3" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="7" hits="4" branch="False" />
+            <line number="8" hits="5" branch="False" />
+            <line number="9" hits="3" branch="False" />
+            <line number="10" hits="4" branch="False" />
+            <line number="11" hits="2" branch="False" />
+            <line number="12" hits="4" branch="False" />
+            <line number="13" hits="5" branch="False" />
+            <line number="14" hits="4" branch="False" />
+            <line number="15" hits="2" branch="False" />
+            <line number="16" hits="3" branch="False" />
+            <line number="17" hits="3" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Seismology.ListEarthquakesRequest" filename="Seismology\ListEarthquakesRequest.cs" line-rate="0.6153" branch-rate="1" complexity="6">
+          <methods>
+            <method name="get_Start" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="7" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="get_End" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="8" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="get_PageSize" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="9" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Cursor" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="10" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="get_MinMagnitude" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="11" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name=".cctor" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="14" hits="1" branch="False" />
+                <line number="15" hits="1" branch="False" />
+                <line number="16" hits="1" branch="False" />
+                <line number="17" hits="1" branch="False" />
+                <line number="18" hits="1" branch="False" />
+                <line number="19" hits="1" branch="False" />
+                <line number="20" hits="1" branch="False" />
+                <line number="21" hits="1" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="7" hits="0" branch="False" />
+            <line number="8" hits="0" branch="False" />
+            <line number="9" hits="0" branch="False" />
+            <line number="10" hits="0" branch="False" />
+            <line number="11" hits="0" branch="False" />
+            <line number="14" hits="1" branch="False" />
+            <line number="15" hits="1" branch="False" />
+            <line number="16" hits="1" branch="False" />
+            <line number="17" hits="1" branch="False" />
+            <line number="18" hits="1" branch="False" />
+            <line number="19" hits="1" branch="False" />
+            <line number="20" hits="1" branch="False" />
+            <line number="21" hits="1" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Seismology.ListEarthquakesResponse" filename="Seismology\ListEarthquakesResponse.cs" line-rate="1" branch-rate="1" complexity="2">
+          <methods>
+            <method name="get_Earthquakes" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="7" hits="3" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Pagination" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="8" hits="2" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="7" hits="3" branch="False" />
+            <line number="8" hits="2" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Json.WmJson" filename="Json\WmJson.cs" line-rate="1" branch-rate="1" complexity="1">
+          <methods>
+            <method name=".cctor" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="10" hits="1" branch="False" />
+                <line number="11" hits="1" branch="False" />
+                <line number="12" hits="1" branch="False" />
+                <line number="13" hits="1" branch="False" />
+                <line number="14" hits="1" branch="False" />
+                <line number="15" hits="1" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="10" hits="1" branch="False" />
+            <line number="11" hits="1" branch="False" />
+            <line number="12" hits="1" branch="False" />
+            <line number="13" hits="1" branch="False" />
+            <line number="14" hits="1" branch="False" />
+            <line number="15" hits="1" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Http.TierHeaders" filename="Http\TierHeaders.cs" line-rate="1" branch-rate="1" complexity="1">
+          <methods>
+            <method name=".cctor" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="8" hits="1" branch="False" />
+                <line number="9" hits="1" branch="False" />
+                <line number="10" hits="1" branch="False" />
+                <line number="11" hits="1" branch="False" />
+                <line number="12" hits="1" branch="False" />
+                <line number="13" hits="1" branch="False" />
+                <line number="14" hits="1" branch="False" />
+                <line number="15" hits="1" branch="False" />
+                <line number="16" hits="1" branch="False" />
+                <line number="17" hits="1" branch="False" />
+                <line number="18" hits="1" branch="False" />
+                <line number="20" hits="1" branch="False" />
+                <line number="21" hits="1" branch="False" />
+                <line number="22" hits="1" branch="False" />
+                <line number="23" hits="1" branch="False" />
+                <line number="24" hits="1" branch="False" />
+                <line number="25" hits="1" branch="False" />
+                <line number="26" hits="1" branch="False" />
+                <line number="27" hits="1" branch="False" />
+                <line number="28" hits="1" branch="False" />
+                <line number="29" hits="1" branch="False" />
+                <line number="30" hits="1" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="8" hits="1" branch="False" />
+            <line number="9" hits="1" branch="False" />
+            <line number="10" hits="1" branch="False" />
+            <line number="11" hits="1" branch="False" />
+            <line number="12" hits="1" branch="False" />
+            <line number="13" hits="1" branch="False" />
+            <line number="14" hits="1" branch="False" />
+            <line number="15" hits="1" branch="False" />
+            <line number="16" hits="1" branch="False" />
+            <line number="17" hits="1" branch="False" />
+            <line number="18" hits="1" branch="False" />
+            <line number="20" hits="1" branch="False" />
+            <line number="21" hits="1" branch="False" />
+            <line number="22" hits="1" branch="False" />
+            <line number="23" hits="1" branch="False" />
+            <line number="24" hits="1" branch="False" />
+            <line number="25" hits="1" branch="False" />
+            <line number="26" hits="1" branch="False" />
+            <line number="27" hits="1" branch="False" />
+            <line number="28" hits="1" branch="False" />
+            <line number="29" hits="1" branch="False" />
+            <line number="30" hits="1" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Core.FieldViolation" filename="Core\FieldViolation.cs" line-rate="1" branch-rate="1" complexity="2">
+          <methods>
+            <method name="get_Field" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="5" hits="3" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Description" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="6" hits="3" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="5" hits="3" branch="False" />
+            <line number="6" hits="3" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Core.GeoCoordinates" filename="Core\GeoCoordinates.cs" line-rate="1" branch-rate="1" complexity="2">
+          <methods>
+            <method name="get_Latitude" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="5" hits="3" branch="False" />
+              </lines>
+            </method>
+            <method name="get_Longitude" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="6" hits="3" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="5" hits="3" branch="False" />
+            <line number="6" hits="3" branch="False" />
+          </lines>
+        </class>
+        <class name="WorldMonitor.Contracts.Core.PaginationResponse" filename="Core\PaginationResponse.cs" line-rate="1" branch-rate="1" complexity="2">
+          <methods>
+            <method name="get_NextCursor" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="5" hits="5" branch="False" />
+              </lines>
+            </method>
+            <method name="get_TotalCount" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="6" hits="4" branch="False" />
+              </lines>
+            </method>
+          </methods>
+          <lines>
+            <line number="5" hits="5" branch="False" />
+            <line number="6" hits="4" branch="False" />
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
